@@ -148,11 +148,11 @@ export default function POSLogin({ onAuthenticated }: Props) {
 
       // ── Offline / local-dev fallback (no backend on :5001) ─────────────────
       const offlineAccounts: Record<string, { name: string; role: string; pass: string }> = {
-        'owner@dhakaltraders.com':    { name: 'Owner User',        role: 'owner',    pass: 'owner123' },
+        'owner@dhakaltraders.com':    { name: 'Owner User',        role: 'owner',    pass: 'admin123' },
         'admin@dhakaltraders.com':    { name: 'Admin User',        role: 'admin',    pass: 'admin123' },
-        'cashier@dhakaltraders.com':  { name: 'Cashier User',      role: 'cashier',  pass: 'cashier123' },
-        'supplier@dhakaltraders.com': { name: 'Supplier User',     role: 'supplier', pass: 'supplier123' },
-        'customer@dhakaltraders.com': { name: 'Customer User',     role: 'customer', pass: 'customer123' },
+        'cashier@dhakaltraders.com':  { name: 'Cashier User',      role: 'cashier',  pass: 'admin123' },
+        'supplier@dhakaltraders.com': { name: 'Supplier User',     role: 'supplier', pass: 'admin123' },
+        'customer@dhakaltraders.com': { name: 'Customer User',     role: 'customer', pass: 'admin123' },
       };
       
       const inputEmail = email.trim().toLowerCase();
@@ -195,6 +195,10 @@ export default function POSLogin({ onAuthenticated }: Props) {
         <p className="pos-login-hint">
           {t('ढकाल ट्रेडर्स POS प्रणाली प्रयोग गर्न कृपया लगइन गर्नुहोस्।',
              'Sign in with your operator credentials to access the POS system.')}
+        </p>
+        <p className="pos-login-hint" style={{ marginTop: -4, opacity: 0.85 }}>
+          {t('सबै प्रयोगकर्ताले एउटै पासवर्ड प्रयोग गर्छन्; भूमिका अनुसार पहुँच फरक हुन्छ।',
+             'Everyone uses the same password; access changes by role.')}
         </p>
 
         <form onSubmit={handleLogin} className="pos-login-form">

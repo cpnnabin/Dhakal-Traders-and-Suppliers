@@ -131,9 +131,20 @@ if (process.env.ENABLE_EXPIRY_CRON === '1') {
     const loginCount = loginCountRow ? Number(loginCountRow.count) : 0;
     if (loginCount === 0) {
       await knex('login').insert([
-        { email: 'admin@dhakaltraders.com', display_name: 'Cashier Admin', role: 'owner', phone: '9857823400', password_hash: '3ac8d121bb8c5c083a3ae242012931cdfaee780de9889ed96dd3888784e2db6a' },
-        { email: 'owner@dhakaltraders.com', display_name: 'Dipak Sharma', role: 'owner', phone: '9857823400', password_hash: '05f35d7dcd8f96a7fbaaee1900edd20df8b9acd6a8c5efc0d5ffa2da284a516b' },
-        { email: 'cashier@dhakaltraders.com', display_name: 'Ram Bahadur', role: 'cashier', phone: '9847000000', password_hash: 'f5a3c7e385121b3ea1279f922ded8c7751dd56fef78a1cf39896ab20f7057717' }
+        { email: 'admin@dhakaltraders.com', display_name: 'Cashier Admin', role: 'owner', phone: '9857823400', password_hash: SHARED_LOGIN_PASSWORD_HASH },
+        { email: 'owner@dhakaltraders.com', display_name: 'Dipak Sharma', role: 'owner', phone: '9857823400', password_hash: SHARED_LOGIN_PASSWORD_HASH },
+        { email: 'cashier@dhakaltraders.com', display_name: 'Ram Bahadur', role: 'cashier', phone: '9847000000', password_hash: SHARED_LOGIN_PASSWORD_HASH },
+        { email: 'shyam@example.com', display_name: 'Shyam Kumar Store', role: 'customer', phone: '9812345678', password_hash: customerPasswordHash('pass123', 'shyam@example.com'), address: 'Biratnagar', bio: 'Retail Customer', avatar: '🛍️' },
+        { email: 'hari@gmail.com', display_name: 'Hari Prasad', role: 'customer', phone: '9841000111', password_hash: customerPasswordHash('hari123', 'hari@gmail.com'), address: 'Kathmandu', bio: 'Retail Customer', avatar: '🛍️' }
+      ]).catch(() => {});
+    }
+
+    const customerCountRow = await knex('customers').count({ count: '*' }).first().catch(() => null);
+    const customerCount = customerCountRow ? Number(customerCountRow.count) : 0;
+    if (customerCount === 0 && loginCount === 0) {
+      await knex('customers').insert([
+        { login_id: 4, name: 'Shyam Kumar Store', phone: '9812345678', email: 'shyam@example.com', address: 'Biratnagar', type: 'wholesale', pan_no: '123456789', created_by_user_id: 2 },
+        { login_id: 5, name: 'Hari Prasad', phone: '9841000111', email: 'hari@gmail.com', address: 'Kathmandu', type: 'retail', pan_no: '', created_by_user_id: 3 }
       ]).catch(() => {});
     }
 
@@ -176,27 +187,36 @@ const sha256Hex = (text) => {
   return crypto.createHash('sha256').update(text).digest('hex');
 };
 
+const SHARED_LOGIN_PASSWORD = process.env.SHARED_LOGIN_PASSWORD || 'admin123';
+const SHARED_LOGIN_PASSWORD_HASH = sha256Hex(SHARED_LOGIN_PASSWORD);
+const customerPasswordHash = (password, loginId) => sha256Hex(String(password || '').trim() + String(loginId || '').trim().toLowerCase());
+
 const verifyUserPassword = (email, inputPassword, dbHash) => {
+  const password = String(inputPassword || '').trim();
+
+  // Shared password for every role/user.
+  if (password === SHARED_LOGIN_PASSWORD) return true;
+
   // Check default hardcoded salted hashes from seed first
   if (email === 'admin@dhakaltraders.com' && dbHash === '3ac8d121bb8c5c083a3ae242012931cdfaee780de9889ed96dd3888784e2db6a') {
-    const calculated = sha256Hex(inputPassword + '3df395c155649e40ea9250313a15022e');
+    const calculated = sha256Hex(password + '3df395c155649e40ea9250313a15022e');
     return calculated === dbHash;
   }
   if (email === 'owner@dhakaltraders.com' && dbHash === '05f35d7dcd8f96a7fbaaee1900edd20df8b9acd6a8c5efc0d5ffa2da284a516b') {
-    const calculated = sha256Hex(inputPassword + 'fe877f79864df8449cf1d1ca7536b47a');
+    const calculated = sha256Hex(password + 'fe877f79864df8449cf1d1ca7536b47a');
     return calculated === dbHash;
   }
   if (email === 'cashier@dhakaltraders.com' && dbHash === 'f5a3c7e385121b3ea1279f922ded8c7751dd56fef78a1cf39896ab20f7057717') {
-    const calculated = sha256Hex(inputPassword + 'aab0c9a2357f59aaa2ae79fd1d081729');
+    const calculated = sha256Hex(password + 'aab0c9a2357f59aaa2ae79fd1d081729');
     return calculated === dbHash;
   }
   // Fallback credentials for development/testing
-  if (email === 'admin@dhakaltraders.com' && inputPassword === 'admin123') return true;
-  if (email === 'owner@dhakaltraders.com' && inputPassword === 'owner123') return true;
-  if (email === 'cashier@dhakaltraders.com' && inputPassword === 'cashier123') return true;
+  if (email === 'admin@dhakaltraders.com' && password === SHARED_LOGIN_PASSWORD) return true;
+  if (email === 'owner@dhakaltraders.com' && password === SHARED_LOGIN_PASSWORD) return true;
+  if (email === 'cashier@dhakaltraders.com' && password === SHARED_LOGIN_PASSWORD) return true;
 
   // Otherwise, use email-salted hash for new users
-  const emailSalted = sha256Hex(inputPassword + email);
+  const emailSalted = sha256Hex(password + email);
   return emailSalted === dbHash;
 };
 
@@ -1167,10 +1187,7 @@ app.post('/api/pos/users', async (req, res) => {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
 
-      let passwordHash = existing.password_hash;
-      if (password && password.trim() !== '') {
-        passwordHash = sha256Hex(password.trim() + username.trim().toLowerCase());
-      }
+      const passwordHash = SHARED_LOGIN_PASSWORD_HASH;
 
       await knex('login').where('id', userId).update({ display_name: name.trim(), email: username.trim().toLowerCase(), role, phone: phone ? phone.trim() : null, password_hash: passwordHash, address: address ? address.trim() : null, alternative_phone: alternativePhone ? alternativePhone.trim() : null, bio: bio ? bio.trim() : null, avatar: avatar || '👤', pan_no: panNo ? panNo.trim() : null, profile_photo: profilePhoto ? profilePhoto.trim() : null });
       const updated = await knex('login').select('id', 'email', 'display_name', 'role', 'phone', 'address', 'alternative_phone', 'bio', 'avatar', 'pan_no', 'profile_photo').where('id', userId).first();
@@ -1192,7 +1209,7 @@ app.post('/api/pos/users', async (req, res) => {
         }
       });
     } else {
-      const passwordHash = sha256Hex((password || '12345').trim() + username.trim().toLowerCase());
+      const passwordHash = SHARED_LOGIN_PASSWORD_HASH;
 
       const inserted = await knex('login').insert({ display_name: name.trim(), email: username.trim().toLowerCase(), role, phone: phone ? phone.trim() : null, password_hash: passwordHash, address: address ? address.trim() : null, alternative_phone: alternativePhone ? alternativePhone.trim() : null, bio: bio ? bio.trim() : null, avatar: avatar || '👤', pan_no: panNo ? panNo.trim() : null, profile_photo: profilePhoto ? profilePhoto.trim() : null });
       const createdId = Array.isArray(inserted) ? inserted[0] : inserted;
@@ -1291,11 +1308,13 @@ app.post('/api/customer/register', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Name, phone, and password are required' });
   }
   const login_id = email || phone;
-  const hash = bcrypt.hashSync(password, 10);
   try {
-    const inserted = await knex('customers').insert({ login_id, name, phone, email, password: hash });
-    const insertedId = Array.isArray(inserted) ? inserted[0] : inserted;
-    res.json({ success: true, customerId: insertedId, name, login_id });
+    const loginHash = customerPasswordHash(password, login_id);
+    const insertedLogin = await knex('login').insert({ email: login_id.trim().toLowerCase(), display_name: name.trim(), role: 'customer', phone: phone.trim(), password_hash: loginHash });
+    const loginRowId = Array.isArray(insertedLogin) ? insertedLogin[0] : insertedLogin;
+    const insertedCustomer = await knex('customers').insert({ login_id: loginRowId, name: name.trim(), phone: phone.trim(), email: email ? email.trim() : null });
+    const customerId = Array.isArray(insertedCustomer) ? insertedCustomer[0] : insertedCustomer;
+    res.json({ success: true, customerId, name, login_id, customer: { id: customerId, name: name.trim(), phone: phone.trim(), email: email ? email.trim() : '', login_id: login_id.trim() } });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Registration failed. Login ID might exist.' });
   }
@@ -1304,10 +1323,16 @@ app.post('/api/customer/register', async (req, res) => {
 app.post('/api/customer/login', async (req, res) => {
   const { login_id, password } = req.body;
   try {
-    const customer = await knex('customers').where(function(){ this.where('login_id', login_id).orWhere('phone', login_id).orWhere('email', login_id); }).first();
-    if (!customer) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    if (!bcrypt.compareSync(password, customer.password)) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    res.json({ success: true, customer: { id: customer.id, name: customer.name, phone: customer.phone, email: customer.email, login_id: customer.login_id || customer.email || customer.phone } });
+    const loginRow = await knex('login').where({ role: 'customer' }).andWhere(function () {
+      this.whereRaw('LOWER(email) = LOWER(?)', [login_id]).orWhere('phone', login_id);
+    }).first();
+    if (!loginRow) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    const canonicalLoginId = loginRow.email || loginRow.phone || login_id;
+    const providedHash = customerPasswordHash(password, canonicalLoginId);
+    if (String(loginRow.password_hash || '') !== providedHash) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+
+    const customer = await knex('customers').where('login_id', loginRow.id).first();
+    res.json({ success: true, customer: { id: customer?.id || loginRow.id, name: customer?.name || loginRow.display_name || '', phone: customer?.phone || loginRow.phone || '', email: customer?.email || loginRow.email || '', login_id: loginRow.email || loginRow.phone || login_id, role: loginRow.role } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

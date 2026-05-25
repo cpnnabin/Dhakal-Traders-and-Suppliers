@@ -59,9 +59,11 @@ Test POS login at `#pos` with:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Owner | owner@dhakaltraders.com | owner123 |
+| Owner | owner@dhakaltraders.com | admin123 |
 | Admin | admin@dhakaltraders.com | admin123 |
-| Cashier | cashier@dhakaltraders.com | cashier123 |
+| Cashier | cashier@dhakaltraders.com | admin123 |
+
+All staff roles use the same password; only the role changes.
 
 ## 5. API routes (Functions → D1)
 

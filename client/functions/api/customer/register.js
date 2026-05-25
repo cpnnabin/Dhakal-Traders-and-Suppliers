@@ -10,6 +10,12 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
   headers: { 'content-type': 'application/json; charset=utf-8', ...CORS },
 });
 
+const sha256Hex = async (text) => {
+  const bytes = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, '0')).join('');
+};
+
 export const onRequestOptions = async () => new Response(null, { status: 204, headers: CORS });
 
 export async function onRequestPost({ request, env }) {
@@ -23,49 +29,43 @@ export async function onRequestPost({ request, env }) {
   const email = String(body.email || '').trim();
   const password = String(body.password || phone || '').trim();
   if (!name || !phone || !password) return json({ success: false, error: 'Name, phone and password are required.' }, 400);
+  const loginId = String(email || phone).trim();
 
   try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS pos_customers (
-        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-        login_id           TEXT,
-        name               TEXT NOT NULL,
-        phone              TEXT NOT NULL,
-        email              TEXT,
-        address            TEXT,
-        productToBuy       TEXT,
-        type               TEXT DEFAULT 'retail',
-        password           TEXT,
-        panNo              TEXT,
-        alternativeAddress TEXT,
-        alternativePhone   TEXT,
-        created_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
+    const existing = await env.DB.prepare(
+      'SELECT id FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR phone = ?3)'
+    ).bind('customer', loginId, phone).first();
+    if (existing) return json({ success: false, error: 'Account already exists.' }, 409);
 
-    const loginId = email || phone;
-    const exists = await env.DB.prepare('SELECT id FROM pos_customers WHERE login_id = ?1 OR phone = ?2 OR email = ?3').bind(loginId, phone, email).first();
-    if (exists) return json({ success: false, error: 'Account already exists.' }, 409);
-
-    const hashLike = password; // customer portal password kept simple for parity with existing local flow
+    const passwordHash = await sha256Hex(password + loginId.toLowerCase());
     await env.DB.prepare(
-      'INSERT INTO pos_customers (login_id, name, phone, email, password) VALUES (?1, ?2, ?3, ?4, ?5)'
-    ).bind(loginId, name, phone, email || null, hashLike).run();
+      'INSERT INTO login (email, display_name, role, phone, password_hash) VALUES (?1, ?2, ?3, ?4, ?5)'
+    ).bind(loginId.toLowerCase(), name, 'customer', phone, passwordHash).run();
 
-    const created = await env.DB.prepare('SELECT id, login_id, name, phone, email FROM pos_customers WHERE login_id = ?1 OR phone = ?2 ORDER BY id DESC').bind(loginId, phone).first();
+    const loginRow = await env.DB.prepare(
+      'SELECT id, email, display_name, phone FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR phone = ?3) ORDER BY id DESC'
+    ).bind('customer', loginId, phone).first();
+
+    const customerInsert = await env.DB.prepare(
+      'INSERT INTO customers (login_id, name, phone, email) VALUES (?1, ?2, ?3, ?4)'
+    ).bind(loginRow.id, name, phone, email || null).run();
+
+    const created = await env.DB.prepare(
+      'SELECT id, login_id, name, phone, email FROM customers WHERE login_id = ?1'
+    ).bind(loginRow.id).first();
 
     return json({
       success: true,
-      customerId: String(created.id),
-      name: created.name,
-      login_id: created.login_id || '',
+      customerId: String(created?.id || customerInsert.meta?.last_row_id || ''),
+      name: created?.name || name,
+      login_id: loginRow.email || loginRow.phone || loginId,
       customer: {
-        id: String(created.id),
-        _id: String(created.id),
-        login_id: created.login_id || '',
-        name: created.name,
-        phone: created.phone,
-        email: created.email || '',
+        id: String(created?.id || customerInsert.meta?.last_row_id || ''),
+        _id: String(created?.id || customerInsert.meta?.last_row_id || ''),
+        login_id: loginRow.email || loginRow.phone || loginId,
+        name: created?.name || name,
+        phone: created?.phone || phone,
+        email: created?.email || email || '',
       },
     });
   } catch (err) {
