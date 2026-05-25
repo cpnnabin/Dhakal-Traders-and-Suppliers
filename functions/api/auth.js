@@ -51,8 +51,10 @@ async function hashPassword(password, salt) {
   return sha256Hex(password + salt);
 }
 
-const SHARED_LOGIN_PASSWORD = 'admin123';
-const SHARED_LOGIN_PASSWORD_HASH = '2eec76506c072a3b80edb95a82c110c7ac1e3eec222aa5efd9f53cb7060e2d7f';
+const normalizeLoginEmail = (email) => String(email || '').trim().toLowerCase().replace(/@dhakaltraders\.com\.np$/i, '@dhakaltraders.com');
+
+const SHARED_LOGIN_PASSWORD = 'Tribe@123';
+const SHARED_LOGIN_PASSWORD_HASH = 'e0939d580de8176875cfa6680369aa72ac96c1efa10bd589a3f16b0eef6e365e';
 
 // ── Simple stateless token (base64url-encoded JSON + HMAC signature) ──────────
 
@@ -102,6 +104,7 @@ async function verifyToken(token, secret) {
 
 async function verifyUserPassword(email, inputPassword, dbHash) {
   const password = String(inputPassword || '').trim();
+  email = normalizeLoginEmail(email);
 
   if (password === SHARED_LOGIN_PASSWORD) return true;
 
@@ -168,7 +171,7 @@ export async function onRequestPost({ request, env }) {
     return json({ success: false, error: 'Invalid JSON body.' }, 400);
   }
 
-  const email    = (body.email    || '').toLowerCase().trim();
+  const email    = normalizeLoginEmail(body.email);
   const password = (body.password || '').trim();
 
   if (!email || !password)
@@ -190,7 +193,7 @@ export async function onRequestPost({ request, env }) {
         .bind('customer', email).first();
 
       if (cust) {
-        const canonicalLoginId = cust.email || cust.phone || email;
+        const canonicalLoginId = normalizeLoginEmail(cust.email || cust.phone || email);
         const expectedPassword = await sha256Hex(password + canonicalLoginId.toLowerCase());
         if ((cust.password_hash || '') === expectedPassword) {
           user = {

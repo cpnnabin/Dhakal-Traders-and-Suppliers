@@ -1,7 +1,7 @@
 // ─── POS Login Screen ─────────────────────────────────────────────────────────
 // Shown instead of the POS dashboard until the user authenticates.
 // Auth token is stored in sessionStorage (clears when tab closes).
-// Falls back to a hardcoded offline PIN when the API is unreachable (dev mode).
+// Login is backed by the database in both local and deployed environments.
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../LanguageContext';
@@ -36,11 +36,6 @@ function savePOSSession(token: string, cashier: string, role: string, username =
   if (username) sessionStorage.setItem(USERNAME_KEY, username);
 }
 
-/** Hardcoded dev login only (no backend). Express SQLite login uses mock_token_<id> and still calls the API. */
-export function isOfflineToken(token: string) {
-  return token === 'mock_token';
-}
-
 function isLocalDev() {
   const h = window.location.hostname;
   return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '::1';
@@ -51,8 +46,6 @@ function isLocalDev() {
 interface Props {
   onAuthenticated: (cashier: string, role: string) => void;
 }
-
-const CLOUDFLARE_API_BASE = '';
 
 export default function POSLogin({ onAuthenticated }: Props) {
   const { lang } = useLanguage();
@@ -65,21 +58,11 @@ export default function POSLogin({ onAuthenticated }: Props) {
   const [showPass, setShowPass] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
 
-  // Restore session on refresh (offline tokens skip remote validation)
+  // Restore session on refresh and validate the stored token against the API.
   useEffect(() => {
     const { token, cashier, role, username } = getPOSSession();
     if (token && cashier) {
-      if (isOfflineToken(token)) {
-        onAuthenticated(cashier, role);
-        emailRef.current?.focus();
-        return;
-      }
-      // Local dev: Express has /api/pos/* only — skip Cloudflare /api/auth (proxies to dead/wrong route)
-      if (isLocalDev()) {
-        onAuthenticated(cashier, role);
-        return;
-      }
-      fetch(`${CLOUDFLARE_API_BASE}/api/auth`, { headers: { 'x-pos-token': token } })
+      fetch('/api/auth', { headers: { 'x-pos-token': token } })
         .then((r) => r.json())
         .then((data) => {
           if (data.success) {
@@ -105,66 +88,38 @@ export default function POSLogin({ onAuthenticated }: Props) {
     setError('');
 
     const creds = { email: email.trim().toLowerCase(), password: password.trim() };
+    const loginUrl = isLocalDev() ? '/api/pos/auth/login' : '/api/auth';
 
-    const tryExpressLogin = async (): Promise<boolean> => {
-      const res = await fetch('/api/pos/auth/login', {
+    const readJsonResponse = async (res: Response) => {
+      const text = await res.text();
+      if (!text) return {};
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { success: false, error: text };
+      }
+    };
+
+    const loginWithDb = async (): Promise<boolean> => {
+      const res = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(creds),
       });
-      const fbData = await res.json();
-      if (res.ok && fbData.success) {
-        savePOSSession(fbData.token, fbData.cashier, fbData.role, creds.email);
-        onAuthenticated(fbData.cashier, fbData.role);
+      const data = await readJsonResponse(res);
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      if (data.success) {
+        savePOSSession(data.token, data.cashier, data.role, creds.email);
+        onAuthenticated(data.cashier, data.role);
         return true;
       }
-      return false;
+      throw new Error(data.error || t('अमान्य प्रमाण-पत्र।', 'Invalid credentials.'));
     };
 
     try {
-      // Local: Express SQLite API first (/api/auth is Cloudflare-only and 500s when proxied)
-      if (isLocalDev()) {
-        try {
-          if (await tryExpressLogin()) return;
-        } catch {
-          /* server not running — use offline mock below */
-        }
-      } else {
-        const res = await fetch(`${CLOUDFLARE_API_BASE}/api/auth`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(creds),
-        });
-        const data = await res.json();
-        if (data.success) {
-          savePOSSession(data.token, data.cashier, data.role, creds.email);
-          onAuthenticated(data.cashier, data.role);
-          return;
-        }
-        if (await tryExpressLogin()) return;
-        setError(data.error || t('अमान्य प्रमाण-पत्र।', 'Invalid credentials.'));
-        return;
-      }
-
-      // ── Offline / local-dev fallback (no backend on :5001) ─────────────────
-      const offlineAccounts: Record<string, { name: string; role: string; pass: string }> = {
-        'owner@dhakaltraders.com':    { name: 'Owner User',        role: 'owner',    pass: 'admin123' },
-        'admin@dhakaltraders.com':    { name: 'Admin User',        role: 'admin',    pass: 'admin123' },
-        'cashier@dhakaltraders.com':  { name: 'Cashier User',      role: 'cashier',  pass: 'admin123' },
-        'supplier@dhakaltraders.com': { name: 'Supplier User',     role: 'supplier', pass: 'admin123' },
-        'customer@dhakaltraders.com': { name: 'Customer User',     role: 'customer', pass: 'admin123' },
-      };
-      
-      const inputEmail = email.trim().toLowerCase();
-      const inputPass = password.trim();
-      const account = offlineAccounts[inputEmail];
-
-      if (account && inputPass === account.pass) {
-        savePOSSession('mock_token', account.name, account.role, inputEmail);
-        onAuthenticated(account.name, account.role);
-      } else {
-        setError(t('अमान्य प्रमाण-पत्र।', 'Invalid credentials.'));
-      }
+      if (await loginWithDb()) return;
     } finally {
       setLoading(false);
     }
@@ -197,8 +152,8 @@ export default function POSLogin({ onAuthenticated }: Props) {
              'Sign in with your operator credentials to access the POS system.')}
         </p>
         <p className="pos-login-hint" style={{ marginTop: -4, opacity: 0.85 }}>
-          {t('सबै प्रयोगकर्ताले एउटै पासवर्ड प्रयोग गर्छन्; भूमिका अनुसार पहुँच फरक हुन्छ।',
-             'Everyone uses the same password; access changes by role.')}
+          {t('आफ्नो डाटाबेसमा दर्ता भएको इमेल र पासवर्ड प्रयोग गर्नुहोस्।',
+             'Use the email and password stored in the database for your account.')}
         </p>
 
         <form onSubmit={handleLogin} className="pos-login-form">
@@ -272,43 +227,6 @@ export default function POSLogin({ onAuthenticated }: Props) {
         <div className="pos-login-footer">
           <i className="ri-shield-check-line" />
           {t('Cloudflare D1 द्वारा सुरक्षित प्रमाणीकरण', 'Secured by Cloudflare D1 — HMAC-SHA-256')}
-        </div>
-
-        {/* Test Credentials */}
-        <div style={{
-          marginTop: 24,
-          padding: 16,
-          background: 'rgba(139, 105, 20, 0.1)',
-          border: '1px solid rgba(139, 105, 20, 0.3)',
-          borderRadius: 12,
-          fontSize: 12,
-          color: '#D4AF37',
-          textAlign: 'left',
-          lineHeight: 1.6
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>
-            <i className="ri-test-tube-line" style={{ marginRight: 6 }} />
-            {t('परीक्षण खातहरू (Click to auto-fill):', 'Test Accounts (Click to auto-fill):')}
-          </div>
-          {[
-            { email: 'owner@dhakaltraders.com',    pass: 'owner123',    icon: '👑', label: 'Owner — Full Access' },
-            { email: 'admin@dhakaltraders.com',    pass: 'admin123',    icon: '🛡️', label: 'Admin — Reports, Users, Products' },
-            { email: 'cashier@dhakaltraders.com',  pass: 'cashier123',  icon: '💰', label: 'Cashier — Billing, Stock' },
-            { email: 'supplier@dhakaltraders.com', pass: 'supplier123', icon: '🚛', label: 'Supplier — Orders, Chat' },
-            { email: 'customer@dhakaltraders.com', pass: 'customer123', icon: '🛍️', label: 'Customer — Orders, Chat' },
-          ].map(a => (
-            <div
-              key={a.email}
-              style={{ marginBottom: 6, cursor: 'pointer', padding: '6px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: 8 }}
-              onClick={() => { setEmail(a.email); setPassword(a.pass); }}
-            >
-              <span style={{ fontSize: 16 }}>{a.icon}</span>
-              <div>
-                <strong style={{ fontSize: 12 }}>{a.label}</strong><br />
-                <span style={{ fontSize: 11, opacity: .7 }}>{a.email} / {a.pass}</span>
-              </div>
-            </div>
-          ))}
         </div>
 
         <a href="/" className="pos-login-back">

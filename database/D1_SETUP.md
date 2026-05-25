@@ -59,9 +59,11 @@ Test POS login at `#pos` with:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Owner | owner@dhakaltraders.com | admin123 |
-| Admin | admin@dhakaltraders.com | admin123 |
-| Cashier | cashier@dhakaltraders.com | admin123 |
+| Owner | owner@dhakaltraders.com | Tribe@123 |
+| Admin | admin@dhakaltraders.com | Tribe@123 |
+| Cashier | cashier@dhakaltraders.com | Tribe@123 |
+
+> `owner@dhakaltraders.com.np`, `admin@dhakaltraders.com.np`, and `cashier@dhakaltraders.com.np` also work as aliases.
 
 All staff roles use the same password; only the role changes.
 

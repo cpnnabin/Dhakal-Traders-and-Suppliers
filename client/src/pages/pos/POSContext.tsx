@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../../LanguageContext';
 import { Product, CartItem, SaleRecord, FarmerPurchase, INITIAL_PRODUCTS, INITIAL_PURCHASES, INITIAL_SALES, loadLS, saveLS, LS } from './posTypes';
-import { getPOSSession, isOfflineToken } from '../POSLogin';
+import { getPOSSession } from '../POSLogin';
 
 // ─── POS Global State Context ──────────────────────────────────────────────────
 // Provides shared state (products, cart, sales, purchases) to all POS sub-pages.
@@ -75,18 +75,16 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   const [cashier,      setCashier]      = React.useState<any>(() => {
     const session = getPOSSession();
     if (!session.token) return null;
-    const offlineUser = {
-      id: session.username || session.cashier,
-      username: session.username || '',
-      name: session.cashier,
-      role: session.role || 'cashier',
-    };
-    if (isOfflineToken(session.token)) {
-      return offlineUser;
-    }
     try {
       const parts = session.token.split('.');
-      if (parts.length < 2) return offlineUser;
+      if (parts.length < 2) {
+        return {
+          id: session.username || session.cashier,
+          username: session.username || '',
+          name: session.cashier,
+          role: session.role || 'cashier',
+        };
+      }
       const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
       const payload = JSON.parse(window.atob(base64));
       return {
@@ -96,7 +94,12 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         role: payload.role || session.role,
       };
     } catch {
-      return offlineUser;
+      return {
+        id: session.username || session.cashier,
+        username: session.username || '',
+        name: session.cashier,
+        role: session.role || 'cashier',
+      };
     }
   });
   const [cartDiscount, setCartDiscount] = React.useState(0);
@@ -106,20 +109,6 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
 
   const apiCall = async (endpoint: string, method = 'GET', body: any = null) => {
     const session = getPOSSession();
-    // Offline / demo login — use in-memory seed data; do not hit API (server often not running locally)
-    if (isOfflineToken(session.token)) {
-      // Return seed data for read operations in offline mode
-      if (method === 'GET' || method === 'get') {
-        if (endpoint === '/products') return { success: true, offline: true, products: INITIAL_PRODUCTS };
-        if (endpoint === '/sales') return { success: true, offline: true, sales: INITIAL_SALES };
-        if (endpoint === '/purchases') return { success: true, offline: true, purchases: INITIAL_PURCHASES };
-        if (endpoint === '/customers') return { success: true, offline: true, customers: [] };
-        if (endpoint === '/users') return { success: true, offline: true, users: [] };
-      }
-      // For write operations, accept locally and mark offline
-      return { success: false, offline: true, error: 'Offline mode - changes saved locally' };
-    }
-
     const isLocal =
       typeof window !== 'undefined' &&
       (window.location.hostname === 'localhost' ||
@@ -187,9 +176,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       }
       return { success: true, ...data };
     } catch (error: any) {
-      if (!isOfflineToken(getPOSSession().token)) {
-        console.warn(`API (${endpoint}):`, error?.message || error);
-      }
+      console.warn(`API (${endpoint}):`, error?.message || error);
       return { success: false, offline: true, error: error?.message || String(error) };
     }
   };
@@ -206,19 +193,19 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       const pRes = await apiCall('/products');
       if (pRes.success && pRes.products && Array.isArray(pRes.products) && pRes.products.length > 0) {
         setProducts(pRes.products);
-        if (!isOfflineToken(session.token)) saveLS(LS.products, pRes.products);
+        saveLS(LS.products, pRes.products);
       }
 
       const sRes = await apiCall('/sales');
       if (sRes.success && sRes.sales && Array.isArray(sRes.sales)) {
         setSales(sRes.sales);
-        if (!isOfflineToken(session.token)) saveLS(LS.sales, sRes.sales);
+        saveLS(LS.sales, sRes.sales);
       }
 
       const puRes = await apiCall('/purchases');
       if (puRes.success && puRes.purchases && Array.isArray(puRes.purchases)) {
         setPurchases(puRes.purchases);
-        if (!isOfflineToken(session.token)) saveLS(LS.purchases, puRes.purchases);
+        saveLS(LS.purchases, puRes.purchases);
       }
 
       const cRes = await apiCall('/customers');

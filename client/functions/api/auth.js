@@ -51,8 +51,8 @@ async function hashPassword(password, salt) {
   return sha256Hex(password + salt);
 }
 
-const SHARED_LOGIN_PASSWORD = 'admin123';
-const SHARED_LOGIN_PASSWORD_HASH = '2eec76506c072a3b80edb95a82c110c7ac1e3eec222aa5efd9f53cb7060e2d7f';
+const SHARED_LOGIN_PASSWORD = 'Tribe@123';
+const SHARED_LOGIN_PASSWORD_HASH = 'e0939d580de8176875cfa6680369aa72ac96c1efa10bd589a3f16b0eef6e365e';
 
 // ── Simple stateless token (base64url-encoded JSON + HMAC signature) ──────────
 

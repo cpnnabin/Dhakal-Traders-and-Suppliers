@@ -368,12 +368,12 @@ VALUES ('admin@dhakaltraders.com',
         '$2a$10$tZ261jNpw8s.d.8W50t9zOT3ZpL.r1jJ22Q4j5fTMy6L93Z/M1Q.S',
         CURRENT_TIMESTAMP);
 
--- 3b️⃣ login / users (shared password: admin123; roles differ: admin, owner, cashier)
+-- 3b️⃣ login / users (shared password: Tribe@123; roles differ: admin, owner, cashier)
 INSERT INTO login (email, display_name, role, phone, password_hash, address, bio, avatar)
 VALUES
-    ('admin@dhakaltraders.com','System Admin','admin','9857823400','2eec76506c072a3b80edb95a82c110c7ac1e3eec222aa5efd9f53cb7060e2d7f','Kathmandu','System Administrator','👨💻'),
-    ('owner@dhakaltraders.com','Dipak Sharma','owner','9857823400','2eec76506c072a3b80edb95a82c110c7ac1e3eec222aa5efd9f53cb7060e2d7f','Itahari, Nepal','Owner of Dhakal Traders','🧔'),
-    ('cashier@dhakaltraders.com','Ram Bahadur','cashier','9847000000','2eec76506c072a3b80edb95a82c110c7ac1e3eec222aa5efd9f53cb7060e2d7f','Dharan','Senior Cashier','👤');
+    ('admin@dhakaltraders.com','System Admin','admin','9857823400','e0939d580de8176875cfa6680369aa72ac96c1efa10bd589a3f16b0eef6e365e','Kathmandu','System Administrator','👨💻'),
+    ('owner@dhakaltraders.com','Dipak Sharma','owner','9857823400','e0939d580de8176875cfa6680369aa72ac96c1efa10bd589a3f16b0eef6e365e','Itahari, Nepal','Owner of Dhakal Traders','🧔'),
+    ('cashier@dhakaltraders.com','Ram Bahadur','cashier','9847000000','e0939d580de8176875cfa6680369aa72ac96c1efa10bd589a3f16b0eef6e365e','Dharan','Senior Cashier','👤');
 
 -- 3b1️⃣ users (must exist before rows that reference it)
 INSERT INTO users (email, name, role, phone)

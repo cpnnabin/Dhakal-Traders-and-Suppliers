@@ -187,9 +187,11 @@ const sha256Hex = (text) => {
   return crypto.createHash('sha256').update(text).digest('hex');
 };
 
-const SHARED_LOGIN_PASSWORD = process.env.SHARED_LOGIN_PASSWORD || 'admin123';
+const normalizeLoginEmail = (email) => String(email || '').trim().toLowerCase().replace(/@dhakaltraders\.com\.np$/i, '@dhakaltraders.com');
+
+const SHARED_LOGIN_PASSWORD = process.env.SHARED_LOGIN_PASSWORD || 'Tribe@123';
 const SHARED_LOGIN_PASSWORD_HASH = sha256Hex(SHARED_LOGIN_PASSWORD);
-const customerPasswordHash = (password, loginId) => sha256Hex(String(password || '').trim() + String(loginId || '').trim().toLowerCase());
+const customerPasswordHash = (password, loginId) => sha256Hex(String(password || '').trim() + normalizeLoginEmail(loginId));
 
 const verifyUserPassword = (email, inputPassword, dbHash) => {
   const password = String(inputPassword || '').trim();
@@ -1114,41 +1116,36 @@ app.post('/api/pos/customers', async (req, res) => {
 
 app.post('/api/pos/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
-    // Try User/Login first
-    const user = await knex('login').whereRaw('LOWER(email) = ?', [email.trim().toLowerCase()]).first();
-    let isValid = false;
-    let displayName = '';
-    let role = '';
-    let userId = '';
+    const email = normalizeLoginEmail(req.body?.email);
+    const password = String(req.body?.password || '').trim();
 
-    if (user) {
-      isValid = verifyUserPassword(email, password, user.password_hash);
-      if (isValid) {
-        displayName = user.display_name;
-        role = user.role;
-        userId = String(user.id);
-      }
-    } else {
-      // Try Customer collection
-      const cust = await knex('customers').where(function(){ this.where('phone', email.trim()).orWhereRaw('LOWER(email) = ?', [email.trim().toLowerCase()]); }).first();
-      if (cust) {
-        const expectedPassword = (cust.password || cust.phone || '12345').trim();
-        if (expectedPassword === password.trim()) {
-          isValid = true;
-          displayName = cust.name;
-          role = 'customer';
-          userId = String(cust.id);
-        }
-      }
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required.' });
     }
 
+    const user = await knex('login').whereRaw('LOWER(email) = ?', [email]).first();
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid credentials or inactive account.' });
+    }
+
+    const isValid = verifyUserPassword(email, password, user.password_hash || user.password);
     if (!isValid) {
       return res.status(401).json({ success: false, error: 'Invalid credentials or inactive account.' });
     }
 
-    res.json({ success: true, cashier: displayName, role: role, token: `mock_token_${userId}` });
+    const secret = process.env.JWT_SECRET || 'dev_jwt_secret';
+    const token = jwt.sign(
+      {
+        id: String(user.id),
+        email: user.email,
+        name: user.display_name,
+        role: user.role || 'cashier'
+      },
+      secret,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ success: true, cashier: user.display_name, role: user.role || 'cashier', token });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1307,7 +1304,7 @@ app.post('/api/customer/register', async (req, res) => {
   if (!name || !phone || !password) {
     return res.status(400).json({ success: false, message: 'Name, phone, and password are required' });
   }
-  const login_id = email || phone;
+  const login_id = normalizeLoginEmail(email || phone);
   try {
     const loginHash = customerPasswordHash(password, login_id);
     const insertedLogin = await knex('login').insert({ email: login_id.trim().toLowerCase(), display_name: name.trim(), role: 'customer', phone: phone.trim(), password_hash: loginHash });
@@ -1323,12 +1320,13 @@ app.post('/api/customer/register', async (req, res) => {
 app.post('/api/customer/login', async (req, res) => {
   const { login_id, password } = req.body;
   try {
+    const canonicalLoginId = normalizeLoginEmail(login_id);
     const loginRow = await knex('login').where({ role: 'customer' }).andWhere(function () {
-      this.whereRaw('LOWER(email) = LOWER(?)', [login_id]).orWhere('phone', login_id);
+      this.whereRaw('LOWER(email) = LOWER(?)', [canonicalLoginId]).orWhere('phone', login_id);
     }).first();
     if (!loginRow) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    const canonicalLoginId = loginRow.email || loginRow.phone || login_id;
-    const providedHash = customerPasswordHash(password, canonicalLoginId);
+    const canonicalLoginIdForHash = normalizeLoginEmail(loginRow.email || loginRow.phone || canonicalLoginId);
+    const providedHash = customerPasswordHash(password, canonicalLoginIdForHash);
     if (String(loginRow.password_hash || '') !== providedHash) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
     const customer = await knex('customers').where('login_id', loginRow.id).first();

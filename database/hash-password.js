@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Generate a shared SHA-256 password hash for D1 login seed data.
- * Usage: node database/hash-password.js admin123
+ * Usage: node database/hash-password.js Tribe@123
  *
  * All staff roles use the same password; role is stored separately.
  */
@@ -9,7 +9,7 @@ const crypto = require('crypto');
 
 const SHARED_SALT = '3df395c155649e40ea9250313a15022e';
 
-const password = process.argv[2] || 'admin123';
+const password = process.argv[2] || 'Tribe@123';
 const role = process.argv[3] || 'shared';
 const salt = SHARED_SALT;
 
