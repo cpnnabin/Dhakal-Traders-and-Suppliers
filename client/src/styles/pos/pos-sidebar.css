@@ -1,0 +1,214 @@
+/* POS shared sidebar styles (extracted from dashboard.css)
+   This file is imported by pos.css so all POS pages get the same sidebar UI.
+*/
+
+.pos-glow-accent {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(197, 17, 48, 0.1) 0%, rgba(0, 56, 147, 0.02) 70%, transparent 100%);
+  top: -100px;
+  right: -100px;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(80px);
+}
+.pos-glow-accent-2 {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 56, 147, 0.08) 0%, rgba(197, 17, 48, 0.01) 70%, transparent 100%);
+  bottom: -200px;
+  left: -200px;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(100px);
+}
+
+/* --- SIDEBAR STYLE --- */
+.pos-sidebar {
+  width: 260px;
+  background-color: var(--pos-sidebar-bg);
+  border-right: 1px solid var(--pos-card-border);
+  display: flex;
+  flex-direction: column;
+  transition: var(--pos-transition);
+  z-index: 10;
+  flex-shrink: 0;
+  position: relative;
+  height: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.pos-sidebar.collapsed {
+  width: 80px;
+}
+
+.pos-sidebar-header {
+  padding: 24px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--pos-card-border);
+  overflow: hidden;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pos-sidebar-logo {
+  font-size: 28px;
+  color: var(--pos-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pos-sidebar-title {
+  display: flex;
+  flex-direction: column;
+}
+.pos-sidebar-brand {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  color: #FFFFFF;
+}
+.pos-sidebar-sub {
+  font-size: 11px;
+  color: #FBBF24;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Nav Menu — scrollable when many items */
+.pos-sidebar-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.pos-sidebar-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pos-sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.pos-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 12px;
+  color: #E5E7EB; /* Light text for dark maroon bg */
+  cursor: pointer;
+  transition: var(--pos-transition);
+  gap: 14px;
+  font-weight: 500;
+  font-size: 15px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  outline: none;
+}
+.pos-menu-item i {
+  font-size: 20px;
+  transition: var(--pos-transition);
+  flex-shrink: 0;
+}
+.pos-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
+}
+.pos-menu-item.active {
+  background: #FFFFFF;
+  color: var(--pos-sidebar-bg);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+.pos-menu-item.active i {
+  color: var(--pos-sidebar-bg);
+}
+
+.pos-menu-item--logout {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 14px;
+  color: #FCA5A5;
+}
+
+.pos-menu-item--logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #FEE2E2;
+}
+.pos-menu-text {
+  transition: var(--pos-transition);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.pos-sidebar.collapsed .pos-menu-text,
+.pos-sidebar.collapsed .pos-sidebar-title {
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
+  display: none;
+}
+
+/* Weather Widget in Sidebar Footer */
+.pos-sidebar-footer {
+  padding: 20px 16px;
+  border-top: 1px solid var(--pos-card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.pos-weather-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--pos-text);
+  white-space: nowrap;
+}
+.pos-weather-card i {
+  font-size: 24px;
+  color: #FBBF24;
+  animation: pos-spin 12s linear infinite;
+}
+.pos-weather-info {
+  display: flex;
+  flex-direction: column;
+}
+.pos-weather-temp {
+  font-weight: 700;
+  font-size: 14px;
+}
+.pos-weather-desc {
+  font-size: 11px;
+  color: var(--pos-text-muted);
+}
+.pos-sidebar.collapsed .pos-weather-info {
+  display: none;
+}
+
+@keyframes pos-spin {
+  100% { transform: rotate(360deg); }
+}

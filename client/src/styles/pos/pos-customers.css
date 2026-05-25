@@ -1,0 +1,87 @@
+/* ─── POS Customers Page Styles ────────────────────────────────────────── */
+
+/* Register Form styles */
+.pos-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.pos-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pos-input-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pos-text-muted);
+}
+
+.pos-form-input {
+  height: 40px;
+  padding: 0 12px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 8px;
+  color: var(--pos-text);
+  font-size: 14px;
+  outline: none;
+  transition: var(--pos-transition);
+}
+
+.pos-form-input:focus {
+  border-color: var(--pos-primary);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.15);
+}
+
+.pos-form-submit {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--pos-primary) 0%, #EF4444 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  transition: var(--pos-transition);
+  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.2);
+}
+
+.pos-form-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(225, 29, 72, 0.3);
+}
+
+/* Customer list actions styling */
+.pos-table button.pos-form-submit {
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.pos-table button.pos-sec-btn {
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  border-radius: 6px;
+}
+
+/* Modal styling for Customer Ledger */
+.pos-modal-overlay {
+  animation: pos-fade-in 0.2s ease-out forwards;
+}
+
+.pos-modal {
+  animation: pos-modal-zoom 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Responsive elements */
+@media (max-width: 768px) {
+  .pos-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

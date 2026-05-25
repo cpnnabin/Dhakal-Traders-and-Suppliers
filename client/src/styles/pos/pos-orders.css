@@ -1,0 +1,170 @@
+/* ─── POS Orders Page Styles (Order History) ────────────────────────────── */
+
+.pos-table button[title*="Receipt"] {
+  color: var(--pos-primary) !important;
+  font-weight: 700;
+  text-decoration: none !important;
+  padding: 6px 12px !important;
+  border-radius: 6px;
+  background: rgba(225, 29, 72, 0.05);
+  border: 1px solid rgba(225, 29, 72, 0.15) !important;
+  transition: var(--pos-transition);
+  display: inline-block;
+}
+
+.pos-table button[title*="Receipt"]:hover {
+  background: var(--pos-primary);
+  color: #fff !important;
+  box-shadow: 0 4px 10px var(--pos-active-glow);
+  transform: translateY(-1px);
+}
+
+/* Order list item detail view accordions */
+.pos-table details {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: var(--pos-transition);
+}
+
+.pos-table details[open] {
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.pos-table summary {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pos-text-muted);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  outline: none;
+}
+
+.pos-table summary::-webkit-details-marker {
+  display: none;
+}
+
+.pos-table summary::before {
+  content: '▶';
+  font-size: 8px;
+  transition: transform 0.2s ease;
+  color: var(--pos-primary);
+}
+
+.pos-table details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.pos-table details ul {
+  padding: 8px 12px 10px 24px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.pos-table details li {
+  color: var(--pos-text) !important;
+  padding: 4px 0;
+  font-weight: 500;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.03);
+}
+
+.pos-table details li:last-child {
+  border-bottom: none;
+}
+
+/* Walk-in customer badge styling */
+.pos-table span[style*="opacity: 0.5"] {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--pos-card-border);
+  color: var(--pos-text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  opacity: 1 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Form Search inputs in Header */
+.pos-panel-header .pos-form-input,
+.pos-panel-header .pos-form-select {
+  height: 36px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 8px;
+  color: var(--pos-text);
+  font-size: 13px;
+  outline: none;
+  transition: var(--pos-transition);
+}
+
+.pos-panel-header .pos-form-input:focus,
+.pos-panel-header .pos-form-select:focus {
+  border-color: var(--pos-primary);
+  box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.1);
+}
+
+/* Responsive Table Overrides */
+@media (max-width: 768px) {
+  .pos-panel-header {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+  }
+  
+  .pos-panel-header > div {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .pos-panel-header .pos-form-input,
+  .pos-panel-header .pos-form-select {
+    width: 100% !important;
+  }
+}
+
+/* ── Orders Page Additions ── */
+.orders-wrap { display: flex; flex-direction: column; gap: 12px; height: calc(100vh - 100px); overflow: hidden; padding: 16px 20px; }
+
+.orders-stats {
+  display: flex; gap: 12px; flex-shrink: 0; flex-wrap: wrap;
+}
+.ord-stat {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 140px;
+  background: var(--pos-card-bg); border: 1px solid var(--pos-card-border); border-radius: 10px; padding: 12px;
+}
+.ord-stat i { font-size: 22px; color: var(--pos-accent); }
+.ord-stat .os-label { font-size: 11px; color: var(--pos-text-muted); display: block; }
+.ord-stat strong { font-size: 15px; font-weight: 700; display: block; }
+
+.orders-filters { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; align-items: center; }
+
+.orders-table { font-size: 13px; }
+.orders-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.orders-table th.num, .orders-table td.num { text-align: right; }
+.ord-row.is-return td { opacity: .7; background: rgba(239,68,68,.03); }
+.ord-row.returned { opacity: .6; }
+
+.invoice-link { background: none; border: none; color: var(--pos-accent); cursor: pointer; font-weight: 700; font-size: 13px; text-decoration: underline; padding: 0; font-family: monospace; }
+.return-tag { font-size: 10px; background: var(--pos-danger); color: #fff; border-radius: 4px; padding: 1px 5px; margin-left: 4px; font-weight: 700; }
+
+.pay-mode-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,.06); }
+.pay-mode-badge.pay-mode-cash    { background: rgba(34,197,94,.1); color: var(--pos-success); }
+.pay-mode-badge.pay-mode-credit  { background: rgba(239,68,68,.1); color: var(--pos-danger); }
+.pay-mode-badge.pay-mode-esewa   { background: rgba(251,191,36,.1); color: #FBBF24; }
+.pay-mode-badge.pay-mode-khalti  { background: rgba(139,92,246,.1); color: #8B5CF6; }
+.pay-mode-badge.pay-mode-card    { background: rgba(59,130,246,.1); color: #60A5FA; }
+
+.ord-items-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.ord-item-chip { font-size: 11px; background: rgba(255,255,255,.06); border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
+.ord-item-chip.muted { color: var(--pos-text-muted); }
+
+.return-sale-preview { background: rgba(255,255,255,.04); border-radius: 8px; padding: 12px; font-size: 13px; }
+.return-warning { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #F59E0B; display: flex; align-items: center; gap: 8px; margin-top: 12px; }

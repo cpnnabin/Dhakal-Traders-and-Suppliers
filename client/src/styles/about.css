@@ -1,0 +1,155 @@
+/* ============================================================
+   ABOUT — Cinematic Premium Redesign
+   ============================================================ */
+
+/* New keyframes */
+@keyframes floatY {
+  0%, 100% { transform: translateY(0px) rotate(-2deg); }
+  50%       { transform: translateY(-18px) rotate(-2deg); }
+}
+@keyframes floatYFront {
+  0%, 100% { transform: translateY(0px) rotate(2deg); }
+  50%       { transform: translateY(-12px) rotate(2deg); }
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeSlideLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeSlideRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Section wrapper */
+#about { padding: 0; background: linear-gradient(180deg, #e9eff8 0%, var(--ice) 18%, var(--ice) 100%); position: relative; }
+.about-section-inner { position: relative; padding: 104px 5%; overflow: hidden; }
+
+/* Background photo */
+.about-bg-photo {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+}
+.about-bg-photo img {
+  width: 100%; height: 100%; object-fit: cover; object-position: center;
+  filter: contrast(1.1) saturate(1.08) brightness(.98);
+}
+.about-bg-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(233,239,248,.82) 0%, rgba(240,244,255,.72) 60%, rgba(233,239,248,.66) 100%);
+}
+
+.about-wrap { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+.about-grid  { display: grid; grid-template-columns: 1.1fr 1fr; gap: 4rem; align-items: start; }
+
+/* Text column */
+.about-text {
+  position: relative;
+  z-index: 2;
+  background: rgba(255,255,255,0.90);
+  padding: 1.6rem 1.8rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(10,20,40,0.08);
+}
+
+.about-text > p {
+  margin: 0; padding: 0 0 1.25rem;
+  font-family: var(--font-ne); color: #0b2236;
+  font-size: 1.05rem; line-height: 1.9; text-align: justify;
+}
+
+/* Registration badge */
+.reg-badge {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 1.2rem 1.4rem; border-radius: 12px;
+  background: var(--white); border: 2px solid rgba(200,16,46,.15);
+  margin: 1.5rem 0; box-shadow: 0 4px 16px rgba(0,29,84,.07);
+}
+.reg-badge-icon { font-size: 1.5rem; }
+.reg-badge-label {
+  font-family: var(--font-en-head); font-size: .65rem;
+  letter-spacing: 3px; text-transform: uppercase; color: var(--red);
+  display: block; margin-bottom: .25rem;
+}
+.reg-badge-text { font-family: var(--font-ne); font-size: .9rem; color: #3a4f6a; line-height: 1.6; }
+
+/* Owner card */
+.owner-card {
+  padding: 1.4rem 1.5rem; border-radius: 14px;
+  background: linear-gradient(135deg, #001D54, #003087);
+  color: var(--white); margin-top: 1rem;
+  box-shadow: 0 8px 28px rgba(0,29,84,.25);
+}
+.owner-name  { font-family: var(--font-en-head); font-size: 1.15rem; letter-spacing: 1px; color: var(--gold); margin-bottom: .25rem; }
+.owner-role  { font-size: .85rem; color: rgba(255,255,255,.65); margin-bottom: .8rem; }
+.owner-phone { font-size: .9rem; color: rgba(255,255,255,.85); }
+.owner-phone a { color: var(--gold); text-decoration: none; }
+.owner-phone a:hover { text-decoration: underline; }
+.owner-fb {
+  display: inline-flex; align-items: center; gap: .5rem;
+  margin-top: 1rem; padding: .5rem 1.1rem; border-radius: 50px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+  color: var(--white); font-size: .82rem; text-decoration: none;
+  transition: all .3s ease;
+}
+.owner-fb:hover { background: #1877f2; border-color: #1877f2; transform: translateY(-2px); }
+
+/* RIGHT column */
+.about-right { display: flex; flex-direction: column; gap: 2rem; }
+
+/* Photo stack */
+.about-photo-stack {
+  position: relative; height: 280px;
+}
+.about-photo-frame {
+  position: absolute; border-radius: 18px; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+}
+.about-photo-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.about-photo-frame--back {
+  width: 75%; height: 220px; bottom: 0; left: 0;
+  animation: floatY 6s ease-in-out infinite;
+}
+.about-photo-frame--front {
+  width: 60%; height: 180px; top: 0; right: 0;
+  animation: floatYFront 5s ease-in-out infinite;
+  border: 4px solid var(--white);
+}
+
+/* 20+ Years badge */
+.about-years-badge {
+  position: absolute; bottom: 20px; right: 12px;
+  background: linear-gradient(135deg, var(--red), var(--dred));
+  color: var(--white); border-radius: 50%;
+  width: 80px; height: 80px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: 0 6px 22px rgba(200,16,46,.45);
+  animation: pulse 2.5s ease-in-out infinite;
+  z-index: 5;
+}
+.about-years-num   { font-family: var(--font-en-head); font-size: 1.3rem; font-weight: 900; line-height: 1; }
+.about-years-label { font-size: .45rem; letter-spacing: 1px; text-transform: uppercase; text-align: center; line-height: 1.3; margin-top: 2px; }
+
+/* Feature cards */
+.about-cards { display: flex; flex-direction: column; gap: .9rem; }
+.about-card {
+  padding: 1.1rem 1.3rem; border-radius: 12px;
+  background: var(--white); border-left: 4px solid var(--red);
+  box-shadow: 0 3px 18px rgba(0,29,84,.08);
+  display: flex; gap: 1rem; align-items: flex-start;
+  transition: transform .3s ease, box-shadow .3s ease;
+}
+.about-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,29,84,.14); }
+.ac-icon  { font-size: 1.5rem; flex-shrink: 0; }
+.ac-title { font-family: var(--font-ne); font-weight: 700; font-size: .95rem; color: var(--navy); margin-bottom: .2rem; }
+.ac-desc  { font-family: var(--font-ne); font-size: .84rem; color: var(--gray); line-height: 1.6; }
+
+/* Responsive */
+@media (max-width: 860px) {
+  .about-grid { grid-template-columns: 1fr; }
+  .about-photo-stack { height: 220px; }
+  .about-section-inner { padding: 64px 5%; }
+  .about-text { padding: 1.2rem 1.2rem; }
+}

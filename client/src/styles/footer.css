@@ -1,0 +1,119 @@
+/* ============================================================
+   FOOTER — Gradient top border, social hover, SEO copyright
+   ============================================================ */
+
+.footer-new {
+  background: linear-gradient(180deg, #070b16 0%, var(--dark) 55%, #050711 100%);
+  padding: 3.2rem 5% 1.6rem;
+  position: relative;
+}
+
+/* Orange-to-transparent gradient top border */
+.footer-top-gradient {
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, transparent 0%, #f97316 30%, var(--gold) 50%, #f97316 70%, transparent 100%);
+}
+
+.footer-grid {
+  max-width: 1100px; margin: 0 auto 2rem;
+  display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 2.2rem;
+}
+.footer-col { display: flex; flex-direction: column; min-width: 0; }
+
+.footer-col h4 {
+  font-family: var(--font-en-head); font-size: .72rem;
+  letter-spacing: 4px; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 1rem;
+}
+.footer-col p, .footer-col > div:not(.footer-reg):not(.footer-socials) {
+  font-family: var(--font-ne); font-size: .85rem;
+  color: rgba(255,255,255,.5); line-height: 1.8;
+}
+.footer-col a {
+  font-family: var(--font-ne); font-size: .87rem;
+  color: rgba(255,255,255,.55); text-decoration: none;
+  margin-bottom: .5rem; transition: color .25s ease;
+  display: block;
+}
+.footer-col a:hover, .footer-col .copy-contact:hover { color: var(--gold); }
+
+.footer-col .copy-contact {
+  color: rgba(255,255,255,.55);
+  font-family: var(--font-ne);
+  margin-bottom: .5rem;
+  width: 100%;
+}
+.footer-col .copy-contact.copied {
+  color: #4ade80;
+}
+
+.footer-reg {
+  font-family: var(--font-ne); font-size: .78rem;
+  color: rgba(255,255,255,.3); line-height: 1.7;
+  margin-top: .5rem;
+}
+
+/* Social icons row */
+.footer-socials { display: flex; gap: .7rem; margin-top: 1rem; }
+.footer-social-icon {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  text-decoration: none;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(255,255,255,.55);
+  transition: all .3s ease;
+}
+.footer-social-icon--fb:hover {
+  background: #1877f2; border-color: #1877f2; color: var(--white);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(24,119,242,.4);
+}
+
+/* Divider */
+.footer-divider {
+  max-width: 1100px; margin: 0 auto 1.4rem;
+  border: none; border-top: 1px solid rgba(255,255,255,.07);
+}
+
+/* Bottom row */
+.footer-bottom {
+  max-width: 1100px; margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 1rem; flex-wrap: wrap;
+}
+.fl-logo {
+  font-family: var(--font-en-head); font-size: .8rem;
+  letter-spacing: 2px; color: var(--gold); text-transform: uppercase;
+}
+.fl-copy {
+  font-size: .76rem; color: rgba(255,255,255,.28);
+  font-family: 'EB Garamond', serif; letter-spacing: .3px;
+}
+
+/* Dev credit */
+.dev-credit {
+  text-align: center; padding: 1rem 5% 1.5rem;
+  background: var(--dark);
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.dev-credit p {
+  font-family: var(--font-ne); font-size: .8rem;
+  color: rgba(255,255,255,.3);
+}
+.dev-credit a { color: var(--gold); text-decoration: none; }
+.dev-credit a:hover { text-decoration: underline; }
+
+@media (max-width: 860px) {
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 1.8rem; }
+}
+@media (max-width: 560px) {
+  .footer-new { padding: 2rem 5% 1.2rem; }
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .footer-grid .footer-col:nth-child(1),
+  .footer-grid .footer-col:nth-child(4) { grid-column: span 2; }
+  .footer-col h4 { margin-bottom: 0.6rem; }
+  .footer-col a { margin-bottom: 0.4rem; }
+  .footer-bottom { flex-direction: column; text-align: center; gap: 0.8rem; }
+}

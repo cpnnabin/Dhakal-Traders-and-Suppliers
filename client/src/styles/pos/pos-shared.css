@@ -1,0 +1,509 @@
+/* Shared POS UI pieces: workspace, header, panels, transitions */
+
+@keyframes pos-fade-in-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.pos-container {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--pos-bg);
+  color: var(--pos-text);
+  position: relative;
+}
+
+.pos-workspace {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+  box-sizing: border-box;
+  animation: pos-fade-in-up 0.4s ease-out forwards;
+}
+
+.pos-workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--pos-card-border);
+}
+.pos-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.pos-collapse-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--pos-card-border);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: var(--pos-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--pos-transition);
+}
+.pos-collapse-btn:hover {
+  background-color: var(--pos-primary);
+  border-color: var(--pos-primary);
+}
+
+.pos-workspace-title {
+  font-size: 24px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pos-workspace-title span { color: var(--pos-primary); }
+
+.pos-header-right { display: flex; align-items: center; gap: 16px; }
+
+/* Cashier selector (header control) */
+.pos-cashier-badge {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 12px;
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.pos-cashier-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--pos-primary) 0%, var(--pos-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFF;
+}
+.pos-cashier-select { background: transparent; border: none; color: var(--pos-text); font-weight: 600; outline: none; cursor: pointer; }
+.pos-cashier-select option { background-color: var(--pos-sidebar-bg); color: var(--pos-text); }
+
+/* Reusable panel styles */
+.pos-panel {
+  background: var(--pos-card-bg);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 16px;
+  padding: 20px;
+  backdrop-filter: blur(10px);
+}
+.pos-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  padding-bottom: 12px;
+}
+.pos-panel-title { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.pos-panel-title i { color: var(--pos-primary); }
+
+/* ─── POS: Header, mobile nav, touch-friendly layout ─────────────────────── */
+
+.pos-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  border: none;
+  z-index: 90;
+  cursor: pointer;
+}
+
+.pos-mobile-menu-btn {
+  display: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--pos-card-border);
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  color: var(--pos-text);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.pos-desktop-only { display: flex; }
+
+.pos-header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pos-header-subtitle {
+  font-size: 11px;
+  color: var(--pos-text-muted);
+  font-family: monospace;
+}
+
+.pos-header-search {
+  flex: 1;
+  max-width: 420px;
+  margin: 0 16px;
+  position: relative;
+}
+
+.pos-header-search i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94A3B8;
+  font-size: 18px;
+  pointer-events: none;
+}
+
+.pos-header-search input {
+  width: 100%;
+  padding: 12px 16px 12px 42px;
+  border-radius: 24px;
+  border: 1px solid var(--pos-card-border);
+  background: transparent;
+  color: var(--pos-text);
+  outline: none;
+  font-size: 15;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.pos-header-search input:focus {
+  border-color: var(--pos-primary);
+}
+
+.pos-lang-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  min-height: 44px;
+  background: var(--pos-card-bg);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 20px;
+  color: var(--pos-text);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pos-lang-label { display: inline; }
+
+.pos-page-content {
+  padding: 0 24px 24px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pos-scan-submit {
+  padding: 0 18px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 12px;
+  border: none;
+  background: var(--pos-primary);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.pos-category-scroll {
+  max-height: none;
+}
+
+.pos-hold-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+body.pos-nav-open {
+  overflow: hidden;
+}
+
+.pos-title-short {
+  display: none;
+}
+
+.pos-cashier-name {
+  font-size: 13px;
+  color: var(--pos-text-muted);
+  font-weight: 600;
+}
+
+.pos-cashier-caret {
+  color: var(--pos-text-muted);
+  margin-left: 4px;
+}
+
+@media (max-width: 1024px) {
+  .pos-workspace-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px 12px !important;
+    background: var(--pos-dark-bg);
+    border-bottom: 1px solid var(--pos-card-border);
+  }
+
+  .pos-workspace {
+    padding: 0 !important;
+  }
+
+  .pos-page-content {
+    padding: 0 12px 16px;
+  }
+
+  .pos-workspace-title {
+    font-size: 17px;
+    margin: 0;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pos-title-full {
+    display: none;
+  }
+
+  .pos-title-short {
+    display: inline;
+  }
+
+  .pos-header-subtitle {
+    display: none;
+  }
+
+  .pos-header-left {
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pos-header-titles {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .pos-header-right {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .pos-cashier-name,
+  .pos-cashier-caret {
+    display: none;
+  }
+
+  .pos-cashier-badge {
+    padding: 4px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .pos-cashier-avatar {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  .pos-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    z-index: 100;
+    transform: translateX(-100%);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35);
+    width: min(280px, 88vw);
+    touch-action: pan-y;
+  }
+
+  /* Less footer clutter on phone — menu gets more scroll room */
+  .pos-sidebar-footer {
+    padding: 12px;
+  }
+
+  .pos-weather-card {
+    padding: 10px;
+  }
+
+  .pos-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .pos-sidebar.collapsed {
+    width: min(280px, 88vw);
+  }
+
+  .pos-sidebar.collapsed .pos-menu-text,
+  .pos-sidebar.collapsed .pos-sidebar-title {
+    display: flex;
+    opacity: 1;
+    width: auto;
+    pointer-events: auto;
+  }
+
+  .pos-sidebar-backdrop {
+    display: block;
+  }
+
+  .pos-mobile-menu-btn {
+    display: flex;
+  }
+
+  .pos-desktop-only,
+  .pos-header-search {
+    display: none !important;
+  }
+
+  .pos-workspace {
+    width: 100%;
+  }
+
+  .pos-container {
+    height: 100dvh;
+  }
+
+  .pos-category-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 10px;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .pos-category-btn {
+    min-width: 88px;
+    flex-shrink: 0;
+    padding: 10px 12px;
+    min-height: 72px;
+  }
+
+  .pos-new-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .pos-item-card {
+    min-height: 44px;
+  }
+
+  .pos-billing-summary,
+  .pos-billing-layout {
+    order: -1;
+    max-height: none;
+    gap: 12px;
+  }
+
+  .pos-billing-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: auto;
+    min-height: 0;
+  }
+
+  .pos-summary-card--order {
+    max-height: min(38vh, 320px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pos-summary-card--order .pos-order-cart-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pos-order-heading {
+    margin: 0 0 12px;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .pos-checkout-fields {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .pos-form-actions {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .pos-form-actions .pos-form-submit {
+    width: 100%;
+  }
+
+  .pos-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .pos-panel-header .pos-form-submit {
+    width: 100%;
+  }
+
+  .pos-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .pos-metric-card {
+    padding: 14px;
+  }
+
+  .pos-metric-val {
+    font-size: 18px;
+  }
+
+  .pos-metric-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+  }
+}
+

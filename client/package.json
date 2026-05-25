@@ -1,0 +1,31 @@
+{
+  "name": "dhakal-traders-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "db:setup:remote": "wrangler d1 execute dhakaltraders --remote --config ../wrangler.toml --file=../database/setup.sql",
+    "deploy": "wrangler pages publish ./client/dist"
+  },
+  "dependencies": {
+    "@types/html2canvas": "^0.5.35",
+    "drizzle-orm": "^0.45.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "remixicon": "^4.9.1",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.29",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.3.2",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.10"
+  }
+}

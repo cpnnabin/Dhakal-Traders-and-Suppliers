@@ -1,0 +1,162 @@
+/* POS Dashboard page stylesheet entrypoint.
+   Add dashboard-only overrides here when needed. */
+
+/* ── KPI Metrics Grid ── */
+.pos-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.pos-metric-card {
+  background: var(--pos-card-bg);
+  border: 1px solid var(--pos-card-border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: var(--pos-transition);
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+}
+.pos-metric-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+}
+.pos-metric-info h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pos-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pos-metric-val {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--pos-text);
+  margin-top: 6px;
+}
+.pos-metric-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+.pos-metric-icon.red { background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05)); color: #EF4444; }
+.pos-metric-icon.blue { background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.05)); color: #3B82F6; }
+.pos-metric-icon.green { background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05)); color: #22C55E; }
+.pos-metric-icon.yellow { background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05)); color: #F59E0B; }
+
+/* Dashboard layout grid */
+.pos-dashboard-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+  .pos-dashboard-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Custom crop bar charts */
+.pos-crop-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pos-crop-bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pos-crop-bar-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.pos-crop-bar-track {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.pos-crop-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--pos-secondary), var(--pos-primary));
+  transition: width 1s ease-out;
+}
+
+/* Dashboard List (e.g. Top Products, Low Stock) */
+.pos-dash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pos-dash-list-item {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--pos-card-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: var(--pos-transition);
+}
+
+.pos-dash-list-item:hover {
+  background: rgba(0, 0, 0, 0.25);
+  transform: translateX(4px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.pos-dash-list-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pos-dash-list-info {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.pos-dash-list-title {
+  font-weight: 600;
+  color: var(--pos-text);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pos-dash-list-sub {
+  font-size: 11px;
+  color: var(--pos-text-muted);
+  margin-top: 2px;
+}
+
+.pos-dash-list-value {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--pos-text);
+  white-space: nowrap;
+}
+
+/* Ensure metrics grid is fully responsive on very small screens */
+@media (max-width: 600px) {
+  .pos-metrics-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

@@ -1,0 +1,285 @@
+/* ─── POS Chat Module Styles (Admin & Customer Support) ─────────────────── */
+
+/* ─── Admin Chat Section ─── */
+.admin-chats-container {
+  display: flex;
+  height: 75vh;
+  min-height: 500px;
+  background: var(--pos-bg-card);
+  color: var(--pos-text);
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--pos-card-border);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+}
+
+.admin-sidebar {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--pos-card-border);
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(10px);
+  min-width: 0;
+}
+
+.admin-sidebar button {
+  border-radius: 12px;
+  transition: var(--pos-transition);
+}
+
+.admin-sidebar button:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  transform: translateX(2px);
+}
+
+.admin-chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #0f172a;
+  color: var(--pos-text);
+}
+
+.admin-chat-main form {
+  flex-shrink: 0;
+  background: var(--pos-bg-card) !important;
+  border-top: 1px solid var(--pos-card-border) !important;
+}
+
+.admin-chat-main input {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--pos-card-border) !important;
+  color: var(--pos-text) !important;
+}
+
+.admin-chat-main input:focus {
+  border-color: var(--pos-primary) !important;
+}
+
+/* Chat bubble styling for Admin */
+.admin-chat-main div[style*="flexDirection: column"] {
+  animation: pos-chat-slide-up 0.2s ease-out forwards;
+}
+
+@keyframes pos-chat-slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Customer Chat Section ─── */
+.customer-chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 75vh;
+  min-height: 500px;
+  background: var(--pos-bg-card);
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--pos-card-border);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.35);
+  animation: pos-chat-slide-up 0.3s ease-out;
+}
+
+.customer-chat-header {
+  padding: 16px 24px;
+  background: linear-gradient(90deg, #0F172A, #1E293B);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--pos-card-border);
+}
+
+.customer-chat-title-text {
+  font-size: 16px;
+  letter-spacing: 0.3px;
+}
+
+.customer-chat-back-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--pos-card-border);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  transition: var(--pos-transition);
+}
+
+.customer-chat-back-btn:hover {
+  background: rgba(225, 29, 72, 0.1);
+  border-color: var(--pos-primary);
+}
+
+.customer-chat-messages {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #0f172a;
+  scrollbar-width: thin;
+}
+
+.customer-chat-bubble-row {
+  display: flex;
+  width: 100%;
+  margin-bottom: 4px;
+  animation: pos-chat-slide-up 0.2s ease-out forwards;
+}
+
+.customer-chat-bubble-row.self {
+  justify-content: flex-end;
+}
+
+.customer-chat-bubble-row.other {
+  justify-content: flex-start;
+}
+
+.customer-chat-bubble {
+  display: inline-block;
+  padding: 12px 16px;
+  border-radius: 16px 16px 4px 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  word-break: break-word;
+  max-width: 70%;
+  border: 1px solid var(--pos-card-border);
+  box-sizing: border-box;
+}
+
+.customer-chat-bubble-row.self .customer-chat-bubble {
+  background-color: rgba(225, 29, 72, 0.1);
+  border-color: rgba(225, 29, 72, 0.25);
+  color: var(--pos-text);
+  border-radius: 16px 16px 4px 16px;
+}
+
+.customer-chat-bubble-row.other .customer-chat-bubble {
+  background-color: var(--pos-sidebar-bg);
+  border-color: var(--pos-card-border);
+  color: var(--pos-text);
+  border-radius: 16px 16px 16px 4px;
+}
+
+.customer-chat-bubble-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.customer-chat-sender {
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.customer-chat-bubble-row.self .customer-chat-sender {
+  color: var(--pos-secondary);
+}
+
+.customer-chat-bubble-row.other .customer-chat-sender {
+  color: #3B82F6;
+}
+
+.customer-chat-time {
+  font-size: 10px;
+  color: var(--pos-text-muted);
+}
+
+.customer-chat-message-text {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #e2e8f0;
+}
+
+.customer-chat-form {
+  display: flex;
+  padding: 16px 20px;
+  border-top: 1px solid var(--pos-card-border);
+  background: var(--pos-bg-card);
+  gap: 12px;
+}
+
+.customer-chat-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--pos-card-border);
+  border-radius: 12px;
+  outline: none;
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--pos-text);
+  font-size: 14px;
+  transition: var(--pos-transition);
+}
+
+.customer-chat-input:focus {
+  border-color: var(--pos-primary);
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.15);
+}
+
+.customer-chat-send-btn {
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--pos-primary) 0%, #EF4444 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  transition: var(--pos-transition);
+  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.2);
+}
+
+.customer-chat-send-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(225, 29, 72, 0.3);
+}
+
+/* Responsive Overrides */
+@media (max-width: 900px) {
+  .admin-chats-container {
+    flex-direction: column;
+    height: auto;
+    max-height: 85vh;
+  }
+
+  .admin-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--pos-card-border);
+    max-height: 35vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-chats-container,
+  .customer-chat-container {
+    border-radius: 12px;
+    height: 70vh;
+  }
+}
+
+/* ── Chat Product Picker ── */
+.chat-product-picker {
+  background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px;
+  padding: 12px; margin-bottom: 8px;
+}
+.cpp-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+.cpp-close { background: none; border: none; cursor: pointer; font-size: 14px; color: #64748B; padding: 2px 6px; border-radius: 4px; }
+.cpp-close:hover { background: #E2E8F0; }
+.cpp-search { width: 100%; padding: 6px 10px; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 13px; margin-bottom: 8px; outline: none; box-sizing: border-box; }
+.cpp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; max-height: 180px; overflow-y: auto; }
+.cpp-product {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px;
+  background: #fff; border: 1px solid #E2E8F0; border-radius: 8px; cursor: pointer; transition: all .15s; font-size: 12px;
+}
+.cpp-product:hover { border-color: #0F172A; background: #F1F5F9; }
+.cpp-emoji { font-size: 20px; }
+.cpp-name { font-weight: 600; text-align: center; font-size: 11px; }
+.cpp-price { color: #16A34A; font-weight: 600; font-size: 11px; }

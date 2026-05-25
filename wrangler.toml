@@ -1,0 +1,16 @@
+name = "dhakaltradersandsuppliers"
+compatibility_date = "2024-05-01"
+pages_build_output_dir = "client/dist"
+
+# Pages Functions: /functions/api/*.js → https://your-site.pages.dev/api/*
+# D1 schema + seed: npm run db:setup:remote  (see database/D1_SETUP.md)
+
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dhakaltraders"
+database_id = "13dfcceb-31a2-4c68-a040-c1dbf1f34d4c"
+
+# Environment variables for Pages / Functions. Replace the secret in production
+[vars]
+POS_JWT_SECRET = "a3f9c1d2e5b6f8a7c9d0e1f2b3c4d5e6"

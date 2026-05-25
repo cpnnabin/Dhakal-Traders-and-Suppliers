@@ -1,0 +1,12 @@
+/* UTILITIES */
+.back-top{position:fixed;bottom:2rem;right:2rem;z-index:150;width:48px;height:48px;border-radius:50%;border:none;background:linear-gradient(135deg,var(--red),var(--dred));color:var(--white);font-size:1.3rem;cursor:pointer;box-shadow:0 6px 20px rgba(200,16,46,.4);transition:all .35s;opacity:0;pointer-events:none;display:flex;align-items:center;justify-content:center;transform:translateY(20px)}
+.back-top.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+.reveal{opacity:0;transform:translateY(35px);transition:opacity .8s ease,transform .8s cubic-bezier(.4,0,.2,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.reveal-left{opacity:0;transform:translateX(-40px);transition:opacity .8s ease,transform .8s cubic-bezier(.4,0,.2,1)}
+.reveal-left.visible{opacity:1;transform:translateX(0)}
+.reveal-right{opacity:0;transform:translateX(40px);transition:opacity .8s ease,transform .8s cubic-bezier(.4,0,.2,1)}
+.reveal-right.visible{opacity:1;transform:translateX(0)}
+.reveal-scale{opacity:0;transform:scale(.85);transition:opacity .8s ease,transform .8s cubic-bezier(.4,0,.2,1)}
+.reveal-scale.visible{opacity:1;transform:scale(1)}
+

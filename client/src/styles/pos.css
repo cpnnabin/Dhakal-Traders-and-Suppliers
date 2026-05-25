@@ -1,0 +1,21 @@
+/* Dedicated POS stylesheet entrypoint.
+   The full POS UI styles currently live in dashboard.css and are loaded here
+   so the POS area has its own clear stylesheet hook. */
+
+@import url('./pos/pos-sidebar.css');
+@import url('./pos/pos-dashboard.css');
+@import url('./pos/pos-shared.css');
+@import url('./pos/pos-billing.css');
+@import url('./pos/pos-enhanced.css');
+@import url('./pos/pos-ledger.css');
+@import url('./pos/pos-parties.css');
+@import url('./pos/pos-login.css');
+@import url('./pos/pos-receipt.css');
+@import url('./pos/pos-customers.css');
+@import url('./pos/pos-users.css');
+@import url('./pos/pos-product-entry.css');
+@import url('./pos/pos-orders.css');
+@import url('./pos/pos-reports.css');
+@import url('./pos/pos-stock.css');
+@import url('./pos/pos-chats.css');
+@import url('./pos/dashboard.css');

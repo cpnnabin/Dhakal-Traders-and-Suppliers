@@ -1,0 +1,61 @@
+/* ─── POS Stock Page Styles ────────────────────────────────────────────── */
+
+/* Capacity card details */
+.pos-metrics-grid > div[style*="flexDirection: column"] {
+  background: var(--pos-bg-card) !important;
+  border: 1px solid var(--pos-card-border) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: var(--pos-transition);
+}
+
+.pos-metrics-grid > div[style*="flexDirection: column"]:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Alert list for guidelines */
+.pos-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pos-alert-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--pos-card-border);
+  border-left: 4px solid var(--pos-primary);
+  transition: var(--pos-transition);
+}
+
+.pos-alert-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateX(4px);
+}
+
+.pos-alert-item:nth-child(even) {
+  border-left-color: #3B82F6; /* Blue indicator for alternate tips */
+}
+
+.pos-alert-item i {
+  font-size: 24px;
+  color: var(--pos-primary);
+  flex-shrink: 0;
+}
+
+.pos-alert-item:nth-child(even) i {
+  color: #3B82F6;
+}
+
+.pos-alert-item span {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pos-text);
+  font-weight: 500;
+}

@@ -1,0 +1,239 @@
+/* POS Ledger page stylesheet entrypoint.
+   Add ledger-only overrides here when needed. */
+
+/* ─── Accounting: Ledger & Journal ─────────────────────────────────────────── */
+
+.pos-ledger-page {
+  padding-bottom: 32px;
+}
+
+.pos-ledger-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pos-ledger-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pos-ledger-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--pos-card-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--pos-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--pos-transition);
+}
+
+.pos-ledger-tab:hover {
+  color: var(--pos-text);
+  border-color: rgba(225, 29, 72, 0.35);
+}
+
+.pos-ledger-tab.active {
+  background: rgba(225, 29, 72, 0.12);
+  border-color: var(--pos-primary);
+  color: var(--pos-text);
+}
+
+.pos-ledger-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pos-ledger-select {
+  min-width: 140px;
+  min-height: 44px;
+}
+
+.pos-ledger-search {
+  min-width: 160px;
+  min-height: 44px;
+}
+
+.pos-ledger-table .pos-col-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-ledger-in {
+  color: var(--pos-success);
+  font-weight: 600;
+}
+
+.pos-ledger-out {
+  color: var(--pos-danger);
+  font-weight: 600;
+}
+
+.pos-ledger-balance {
+  font-weight: 700;
+  color: var(--pos-text);
+}
+
+.pos-ledger-ref-btn {
+  background: none;
+  border: none;
+  color: var(--pos-primary);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.pos-ledger-ref {
+  font-weight: 700;
+  color: var(--pos-secondary);
+}
+
+.pos-ledger-code {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  margin-right: 6px;
+}
+
+.pos-ledger-acc-name {
+  font-size: 12px;
+  color: var(--pos-text-muted);
+  display: block;
+  margin-top: 2px;
+}
+
+.pos-ledger-type {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+  opacity: 0.75;
+}
+
+.pos-ledger-type--sale {
+  color: var(--pos-success);
+}
+
+.pos-ledger-type--purchase {
+  color: var(--pos-warning);
+}
+
+.pos-ledger-particulars {
+  max-width: 220px;
+  font-size: 13px;
+}
+
+.pos-ledger-empty {
+  text-align: center;
+  color: var(--pos-text-muted);
+  padding: 32px 16px !important;
+}
+
+.pos-ledger-tfoot td {
+  font-weight: 800;
+  border-top: 2px solid var(--pos-card-border);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.pos-ledger-row--in {
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.pos-ledger-row--out {
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.pos-ledger-note {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--pos-text-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 1024px) {
+  .pos-ledger-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pos-ledger-filters {
+    width: 100%;
+  }
+
+  .pos-ledger-filters .pos-form-submit {
+    width: 100%;
+  }
+
+  .pos-ledger-select,
+  .pos-ledger-search {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .pos-ledger-particulars {
+    max-width: 140px;
+  }
+
+  .pos-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pos-table {
+    min-width: 560px;
+  }
+
+  .pos-modal {
+    width: min(380px, 94vw);
+    max-height: 92dvh;
+  }
+
+}
+
+@media (max-width: 480px) {
+  .pos-page-content {
+    padding: 0 12px 16px;
+  }
+
+  .pos-login-card {
+    padding: 28px 20px;
+  }
+
+  .pos-new-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pos-disc-btn-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .pos-metric-card {
+    padding: 16px;
+  }
+
+  .pos-lang-label {
+    display: none;
+  }
+}
+

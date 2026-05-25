@@ -1,0 +1,169 @@
+/* ============================================================
+   CONTACT — Two-column split, dark form, success state
+   ============================================================ */
+
+@keyframes successPop {
+  0%   { opacity: 0; transform: scale(.8) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+#contact { background: linear-gradient(180deg, #0d1b3e 0%, #0a1428 100%); }
+#contact .section-label    { color: var(--gold); }
+#contact .section-title    { color: #ffffff; }
+#contact .section-line     { background: linear-gradient(90deg, var(--gold), var(--red)); }
+
+.contact-section-inner { position: relative; }
+.contact-wrap { max-width: 1100px; margin: 0 auto; }
+
+/* Compact three-box row (top of contact section) */
+.contact-compact-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.contact-card-compact {
+  display: flex; align-items: center; gap: .9rem;
+  padding: .9rem 1rem; border-radius: 14px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);
+}
+.compact-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  display:flex; align-items:center; justify-content:center; font-size:1.05rem; flex-shrink:0;
+}
+.compact-body { min-width:0; }
+.compact-label { font-family:var(--font-en-head); font-size:.64rem; color:rgba(255,255,255,.6); margin-bottom:.15rem; }
+.compact-copy { font-weight:700; font-size:.95rem; color:var(--gold); }
+.compact-link { color: var(--gold); font-weight:700; text-decoration:none; }
+.compact-link:hover { text-decoration:underline; }
+
+@media (max-width: 860px) {
+  .contact-compact-row { grid-template-columns: 1fr; }
+}
+
+/* Two-column grid */
+.contact-grid {
+  display: grid; grid-template-columns: 1fr 1.2fr;
+  gap: 3.5rem; align-items: start;
+}
+
+/* LEFT — Info cards */
+.contact-info { display: flex; flex-direction: column; gap: 1rem; }
+.contact-info-card {
+  display: flex; align-items: flex-start; gap: 1rem;
+  padding: 1.1rem 1.2rem; border-radius: 14px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  transition: background .3s ease;
+}
+.contact-info-card:hover { background: rgba(255,255,255,.1); }
+
+.contact-info-icon {
+  width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.15rem; flex-shrink: 0;
+}
+.contact-info-label {
+  font-family: var(--font-en-head); font-size: .6rem;
+  letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,.45);
+  margin-bottom: .25rem;
+}
+.contact-info-value {
+  font-family: var(--font-ne); font-size: .93rem;
+  color: rgba(255,255,255,.85); line-height: 1.65;
+}
+.contact-info-value a { color: var(--gold); text-decoration: none; }
+.contact-info-value a:hover { text-decoration: underline; }
+
+/* Facebook button */
+.contact-fb-btn {
+  display: inline-flex; align-items: center; gap: .6rem;
+  margin-top: .5rem; padding: .7rem 1.4rem; border-radius: 50px;
+  background: #1877f2; color: var(--white);
+  font-family: var(--font-ne); font-size: .9rem;
+  text-decoration: none; font-weight: 600;
+  box-shadow: 0 4px 16px rgba(24,119,242,.35);
+  transition: all .3s ease; width: fit-content;
+}
+.contact-fb-btn:hover {
+  background: #0d65d9; transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(24,119,242,.5);
+}
+
+/* RIGHT — Form */
+.contact-form-wrap {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 20px; padding: 2.2rem;
+  backdrop-filter: blur(8px);
+}
+.contact-form { display: flex; flex-direction: column; gap: 1rem; }
+
+/* Inputs */
+.cf-input {
+  width: 100%; padding: .9rem 1.1rem;
+  border-radius: 10px; border: 1.5px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.07); color: var(--white);
+  font-family: var(--font-ne); font-size: .95rem;
+  transition: border-color .3s ease, box-shadow .3s ease;
+  outline: none;
+  appearance: none; -webkit-appearance: none;
+}
+.cf-input::placeholder { color: rgba(255,255,255,.35); }
+.cf-input:focus {
+  border-color: #f97316;
+  box-shadow: 0 0 0 3px rgba(249,115,22,.2);
+}
+.cf-input option { background: #0d1b3e; color: var(--white); }
+.cf-textarea { min-height: 130px; resize: vertical; }
+
+/* Error */
+.cf-error {
+  padding: .7rem 1rem; border-radius: 8px;
+  background: rgba(200,16,46,.15); border: 1px solid rgba(200,16,46,.3);
+  color: #fca5a5; font-family: var(--font-ne); font-size: .88rem;
+}
+
+/* Submit button */
+.cf-submit {
+  padding: .9rem 2rem; border-radius: 50px; border: none;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: var(--white); font-family: var(--font-ne);
+  font-size: 1rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 6px 22px rgba(249,115,22,.4);
+  transition: all .3s cubic-bezier(.4,0,.2,1);
+  letter-spacing: .5px;
+}
+.cf-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(249,115,22,.5);
+}
+.cf-submit:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Success state */
+.contact-success {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center; padding: 3rem 1rem;
+  animation: successPop .5s cubic-bezier(.4,0,.2,1) forwards;
+}
+.contact-success-icon  { font-size: 3.5rem; margin-bottom: 1rem; }
+.contact-success-title {
+  font-family: var(--font-en-head); font-size: 1.5rem;
+  color: #4ade80; margin-bottom: .5rem;
+}
+.contact-success-desc  {
+  font-family: var(--font-ne); font-size: .95rem;
+  color: rgba(255,255,255,.7); margin-bottom: 1.5rem;
+}
+.contact-success-back {
+  padding: .6rem 1.5rem; border-radius: 50px; border: 1.5px solid rgba(255,255,255,.2);
+  background: transparent; color: rgba(255,255,255,.7);
+  font-family: var(--font-ne); font-size: .9rem; cursor: pointer;
+  transition: all .3s ease;
+}
+.contact-success-back:hover { background: rgba(255,255,255,.1); color: var(--white); }
+
+@media (max-width: 860px) {
+  .contact-grid { grid-template-columns: 1fr; }
+}

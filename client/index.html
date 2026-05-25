@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ne">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="ढकाल ट्रेडर्स एण्ड सप्लायर्स — बागचौर, सल्यान। टिमुर, जडीबुटी र दैनिक सामान।" />
+    <meta name="author" content="Dipak Sharma" />
+    <meta name="theme-color" content="#052e16" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>ढकाल ट्रेडर्स एण्ड सप्लायर्स | Dhakal Traders & Suppliers — Bagchaur, Salyan</title>
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "Dhakal Traders and Suppliers",
+      "alternateName": "ढकाल ट्रेडर्स एण्ड सप्लायर्स",
+      "url": "https://dhakaltradersandsuppliers.com.np",
+      "telephone": ["+977-9857823400", "+977-9844966734", "+977-9869596970"],
+      "email": "info@dhakaltradersandsuppliers.com.np",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Bagchaur Municipality-9, Bathan",
+        "addressLocality": "Salyan",
+        "addressRegion": "Karnali",
+        "postalCode": "32400",
+        "addressCountry": "NP"
+      },
+      "founder": { "@type": "Person", "name": "Dipak Sharma" },
+      "foundingDate": "2005",
+      "areaServed": ["Bagchaur Municipality", "Sharada Municipality", "Bangad Kupinde Municipality", "Kalimati Rural Municipality", "Tribeni Rural Municipality", "Kapurkot Rural Municipality", "Chhatreshwori Rural Municipality", "Kumakh Rural Municipality", "Siddha Kumakh Rural Municipality", "Darma Rural Municipality"]
+    }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- Debug helper: append ?showInsets=1 to URL to display computed nav/mobile-menu insets on device -->
+    <script>
+      (function(){
+        try{
+          if(!location.search.includes('showInsets=1')) return;
+          function fmt(v){return v?v.trim():v}
+          const overlay = document.createElement('div');
+          Object.assign(overlay.style,{
+            position:'fixed',right:'8px',top:'8px',zIndex:9999,background:'rgba(0,0,0,0.7)',color:'#fff',padding:'8px 10px',borderRadius:'6px',fontSize:'12px',fontFamily:'sans-serif',maxWidth:'240px',lineHeight:'1.3'
+          });
+          overlay.id='debug-insets-overlay';
+          overlay.innerText = 'measuring...';
+          document.addEventListener('DOMContentLoaded',update, {once:true});
+          function update(){
+            var nav = document.querySelector('nav');
+            var menu = document.querySelector('.mobile-menu');
+            var csNav = nav?getComputedStyle(nav):null;
+            var csMenu = menu?getComputedStyle(menu):null;
+            var values = [];
+            values.push('nav.top: ' + (csNav? fmt(csNav.getPropertyValue('top')) : 'n/a'));
+            values.push('nav.height: ' + (csNav? fmt(csNav.getPropertyValue('height')) : 'n/a'));
+            values.push('mobile-menu.top: ' + (csMenu? fmt(csMenu.getPropertyValue('top')) : 'n/a'));
+            values.push('window.innerHeight: ' + window.innerHeight + 'px');
+            values.push('visualViewport.height: ' + (window.visualViewport? window.visualViewport.height + 'px' : 'n/a'));
+            overlay.innerText = values.join('\n');
+          }
+          document.body.appendChild(overlay);
+          // update on orientation/resize
+          window.addEventListener('resize', update);
+          if(window.visualViewport){ window.visualViewport.addEventListener('resize', update); }
+        }catch(e){console.warn('debug insets helper failed',e)}
+      })();
+    </script>
+  </body>
+</html>

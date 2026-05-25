@@ -1,0 +1,35 @@
+# Robots.txt for Dhakal Traders & Suppliers
+# https://dhakaltradersandsuppliers.com.np
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+Disallow: /node_modules/
+Disallow: /.git/
+Disallow: /dist/
+Disallow: /.env
+
+# Specific crawler rules
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# Yandex
+User-agent: Yandexbot
+Allow: /
+
+# Baidu
+User-agent: Baiduspider
+Allow: /
+
+# Point to sitemap
+Sitemap: https://dhakaltradersandsuppliers.com.np/sitemap.xml
+
+# Respect robots.txt
+User-agent: *
+Crawl-delay: 0
+Request-rate: 10/1s

@@ -1,0 +1,103 @@
+/* ============================================================
+   TIMUR — Cinematic Dark Green Section
+   ============================================================ */
+
+@keyframes kenBurns {
+  0%   { transform: scale(1) translateX(0); }
+  50%  { transform: scale(1.08) translateX(-1%); }
+  100% { transform: scale(1) translateX(0); }
+}
+
+/* Shared base for ALL product pages — fixes absolutely-positioned background image */
+.product-page-section {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, #0d1117, #111827, #1a2234);
+}
+
+/* Section reset — Timur gets its own green gradient on top */
+#timur { padding: 80px 0; margin-top: 1.25rem; background: linear-gradient(160deg, #052e16, #064e3b, #065f46); position: relative; overflow: hidden; }
+#timur::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(74,222,128,.35), rgba(200,16,46,.28), transparent);
+}
+#timur .section-label  { color: #4ade80; }
+#timur .section-title  { color: #ffffff; }
+#timur .section-subtitle { color: rgba(255,255,255,.5); }
+#timur .section-line   { background: linear-gradient(90deg, #4ade80, #22c55e); }
+
+.timur-section-inner { position: relative; padding: 104px 5%; overflow: hidden; }
+
+/* Ken Burns background */
+.timur-bg-photo {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+}
+.timur-bg-photo img {
+  width: 100%; height: 100%; object-fit: cover; object-position: center;
+  opacity: .32; animation: kenBurns 20s ease-in-out infinite;
+}
+.timur-bg-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(160deg, rgba(5,46,22,.62) 0%, rgba(6,95,70,.42) 100%);
+}
+
+.timur-wrap  { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+.timur-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 3.5rem; align-items: center; }
+
+/* Info text */
+.timur-info p {
+  font-family: var(--font-ne); font-size: 1.02rem;
+  line-height: 2.1; color: rgba(255,255,255,.85);
+  margin-bottom: 1rem; text-align: justify;
+}
+
+/* Capacity card */
+.timur-capacity {
+  margin-top: 2rem; padding: 1.5rem; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(34,197,94,.2), rgba(6,95,70,.15));
+  border: 2px solid rgba(74,222,128,.4);
+  backdrop-filter: blur(6px);
+}
+.timur-capacity-title {
+  font-family: var(--font-en-head); font-size: .65rem;
+  letter-spacing: 3px; text-transform: uppercase; color: #4ade80; margin-bottom: .5rem;
+}
+.timur-capacity-amount {
+  display: block; font-family: var(--font-en-head);
+  font-size: 2.2rem; color: var(--gold); letter-spacing: 2px; margin-bottom: .3rem;
+}
+.timur-capacity-text { font-family: var(--font-ne); font-size: .9rem; color: rgba(255,255,255,.65); }
+
+/* 2×2 stat cards */
+.timur-stats {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem;
+}
+.timur-stat {
+  padding: 1.6rem 1.2rem; border-radius: 14px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: .4rem;
+  transition: all .35s cubic-bezier(.4,0,.2,1); cursor: default;
+  backdrop-filter: blur(4px);
+}
+.timur-stat:hover {
+  background: rgba(34,197,94,.18);
+  border-color: #4ade80;
+  transform: translateY(-6px);
+  box-shadow: 0 0 28px rgba(74,222,128,.3);
+}
+.timur-stat-icon  { font-size: 2rem; }
+.timur-stat-num   { font-family: var(--font-en-head); font-size: 1.3rem; color: var(--gold); letter-spacing: 1px; }
+.timur-stat-label { font-family: var(--font-ne); font-size: .8rem; color: rgba(255,255,255,.55); }
+
+@media (max-width: 860px) {
+  .timur-grid { grid-template-columns: 1fr; }
+  .timur-stats { grid-template-columns: 1fr 1fr; }
+}
+/* gallery removed */
