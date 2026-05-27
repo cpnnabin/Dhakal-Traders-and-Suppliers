@@ -24,6 +24,7 @@ export default function CustomerBilling() {
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [amountReceived, setAmountReceived] = useState('');
   const [toast, setToast] = useState<{msg: string; type: 'ok' | 'err'} | null>(null);
+  const QR_IMAGE_URL = '/api/qr-image';
 
   useEffect(() => {
     const stored = loadLS('dhakal_customer', null);
@@ -76,6 +77,7 @@ export default function CustomerBilling() {
     { id: 'Card', labelNe: 'कार्ड', labelEn: 'Card' },
     { id: 'E‑Sewa', labelNe: 'ई‑सेवा', labelEn: 'E‑Sewa' },
     { id: 'Khalti', labelNe: 'खल्ती', labelEn: 'Khalti' },
+    { id: 'QR', labelNe: 'क्यूआर', labelEn: 'QR' },
     { id: 'Credit', labelNe: 'उधारो', labelEn: 'Credit' },
   ];
 
@@ -129,6 +131,21 @@ export default function CustomerBilling() {
             <button type="button" onClick={() => setAmountReceived(String(Math.ceil(total)))}>{t('ठ्याक्कै', 'Exact')}</button>
           </div>
         )}
+
+        {paymentMode === 'QR' && (
+          <div className="pos-bill-cash-tender" style={{ alignItems: 'center', textAlign: 'center' }}>
+            <label>{t('QR स्क्यान गर्नुहोस्', 'Scan the QR code')}</label>
+            <img
+              src={QR_IMAGE_URL}
+              alt={t('QR code', 'QR code')}
+              style={{ width: 180, height: 180, objectFit: 'contain', borderRadius: 14, background: '#fff', padding: 8 }}
+            />
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              {t('कृपया QR स्क्यान गरेर भुक्तानी गर्नुहोस्।', 'Please scan the QR code to complete payment.')}
+            </div>
+          </div>
+        )}
+
         <button type="button" className="pos-bill-checkout" onClick={checkout}>{t('बिल सम्पूर्ण गर्नुहोस्', 'Complete Sale')}</button>
       </section>
     </div>

@@ -43,4 +43,68 @@
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
+
+  // --- Site-wide anti-export protections ---
+  // Keep protections focused on protected media so normal text copy still works.
+  const downloadBlackImage = (fileName = 'dhakal-black.png') => {
+    const size = 2048;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  };
+
+  const handleContext = (e: MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    const protectedTarget = target?.closest?.('img, canvas, .protected, .no-export, [data-protected="true"]');
+    if (!protectedTarget) return;
+    try { e.preventDefault(); } catch (err) {}
+    downloadBlackImage('dhakal-black.png');
+  };
+
+  document.addEventListener('contextmenu', handleContext, { capture: true });
+  document.addEventListener('dragstart', (e) => {
+    const target = e.target as HTMLElement | null;
+    const protectedTarget = target?.closest?.('img, canvas, .protected, .no-export, [data-protected="true"]');
+    if (!protectedTarget) return;
+    try { e.preventDefault(); } catch {}
+  }, { capture: true });
+
+  // Print / screenshot defenses: add class to body to show blackout overlay during print or PrintScreen
+  const setPrintBlock = (on = true) => {
+    if (on) document.body.classList.add('print-block', 'protected-site');
+    else document.body.classList.remove('print-block');
+  };
+
+  window.addEventListener('beforeprint', () => setPrintBlock(true));
+  window.addEventListener('afterprint', () => setPrintBlock(false));
+
+  // PrintScreen key best-effort
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'PrintScreen') {
+      setPrintBlock(true);
+      setTimeout(() => setPrintBlock(false), 700);
+    }
+  });
+
+  // Visibility change: blur when hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) document.body.classList.add('blurred');
+    else document.body.classList.remove('blurred');
+  });
 })();

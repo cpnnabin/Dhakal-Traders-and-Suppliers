@@ -10,3 +10,40 @@
 .reveal-scale{opacity:0;transform:scale(.85);transition:opacity .8s ease,transform .8s cubic-bezier(.4,0,.2,1)}
 .reveal-scale.visible{opacity:1;transform:scale(1)}
 
+/* Site-wide protection styles applied when body.protected-site is set */
+body.protected-site img {
+	-webkit-user-drag: none;
+	user-drag: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	pointer-events: none; /* prevent easy right-click/save on images */
+}
+
+/* watermark for site-wide protected state */
+body.protected-site::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: 3000;
+	pointer-events: none;
+	background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='120'><text x='0' y='20' fill='%23000' fill-opacity='0.04' font-size='14' font-family='Arial'>© Dhakal Traders & Suppliers</text></svg>");
+	background-repeat: repeat;
+	transform: rotate(-18deg) scale(1.1);
+	background-size: 240px 120px;
+	mix-blend-mode: multiply;
+}
+
+/* print / screenshot blackout overlay on whole site */
+body.print-block::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: 99999;
+	background: #000;
+}
+
+/* blurred state when page hidden */
+body.blurred { filter: blur(8px) grayscale(0.6) contrast(0.9); }
+

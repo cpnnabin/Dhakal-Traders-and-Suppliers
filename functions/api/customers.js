@@ -18,24 +18,21 @@ async function ensureCustomersTable(db) {
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS customers (
       id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-      login_id           TEXT,
-      name               TEXT NOT NULL,
+      login_id           INTEGER,
+      full_name          TEXT NOT NULL,
       phone              TEXT NOT NULL,
       email              TEXT,
       address            TEXT,
-       productToBuy       TEXT,
-      type               TEXT DEFAULT 'retail',
-      password           TEXT,
-      panNo              TEXT,
-      alternativeAddress TEXT,
-      alternativePhone   TEXT,
+      pan_no             TEXT,
+      loyalty_points     REAL DEFAULT 0,
+      opening_balance    REAL DEFAULT 0,
       created_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
 
   const tableInfo = await db.prepare('PRAGMA table_info(customers)').all();
   const columns = new Set((tableInfo?.results ?? []).map((c) => c.name));
-  for (const col of ['password', 'panNo', 'alternativeAddress', 'alternativePhone', 'login_id']) {
+  for (const col of ['full_name', 'pan_no', 'loyalty_points', 'opening_balance', 'login_id']) {
     if (!columns.has(col)) {
       await db.prepare(`ALTER TABLE customers ADD COLUMN ${col} TEXT`).run();
     }
@@ -47,23 +44,21 @@ async function ensureCustomersTable(db) {
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS customers_new (
         id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-        login_id           TEXT,
-        name               TEXT NOT NULL,
+        login_id           INTEGER,
+        full_name          TEXT NOT NULL,
         phone              TEXT NOT NULL,
         email              TEXT,
         address            TEXT,
-        type               TEXT DEFAULT 'retail',
-        password           TEXT,
-        panNo              TEXT,
-        alternativeAddress TEXT,
-        alternativePhone   TEXT,
+        pan_no             TEXT,
+        loyalty_points     REAL DEFAULT 0,
+        opening_balance    REAL DEFAULT 0,
         created_at         TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
 
     await db.prepare(`
-      INSERT INTO customers_new (id, login_id, name, phone, email, address, type, password, panNo, alternativeAddress, alternativePhone, created_at)
-      SELECT id, login_id, name, phone, email, address, type, password, panNo, alternativeAddress, alternativePhone, created_at
+      INSERT INTO customers_new (id, login_id, full_name, phone, email, address, pan_no, loyalty_points, opening_balance, created_at)
+      SELECT id, login_id, COALESCE(full_name, name), phone, email, address, COALESCE(pan_no, panNo), COALESCE(loyalty_points, 0), COALESCE(opening_balance, 0), created_at
       FROM customers
     `).run();
 
@@ -80,20 +75,21 @@ export async function onRequestGet({ env }) {
 
   try {
     await ensureCustomersTable(env.DB);
-       const { results } = await env.DB.prepare('SELECT id, name, phone, email, login_id, address, productToBuy, type, password, panNo, alternativeAddress, alternativePhone FROM customers ORDER BY name ASC').all();
+    const { results } = await env.DB.prepare('SELECT id, full_name, phone, email, login_id, address, pan_no, loyalty_points, opening_balance FROM customers ORDER BY full_name ASC').all();
 
     const customers = results.map((c) => ({
       _id: String(c.id),
-      name: c.name,
+      id: String(c.id),
+      name: c.full_name,
+      full_name: c.full_name,
       phone: c.phone,
       email: c.email || '',
-      login_id: c.login_id || '',
+      login_id: c.login_id ? String(c.login_id) : '',
       address: c.address || '',
-      type: c.type || 'retail',
-      password: c.password || c.phone || '12345',
-      panNo: c.panNo || '',
-      alternativeAddress: c.alternativeAddress || '',
-      alternativePhone: c.alternativePhone || '',
+      panNo: c.pan_no || '',
+      pan_no: c.pan_no || '',
+      loyalty_points: Number(c.loyalty_points || 0),
+      opening_balance: Number(c.opening_balance || 0),
     }));
 
     return json({ success: true, customers });
@@ -112,13 +108,15 @@ export async function onRequestPost({ request, env }) {
     return json({ success: false, error: 'Invalid JSON body.' }, 400);
   }
 
-  const { _id, name, phone, email, login_id, address, type, password, panNo, alternativeAddress, alternativePhone } = body;
+  const { _id, id, name, full_name, phone, email, login_id, address, panNo, pan_no, loyalty_points, opening_balance } = body;
+  const customerName = String(full_name || name || '').trim();
+  const customerPan = String(pan_no || panNo || '').trim() || null;
 
   try {
     await ensureCustomersTable(env.DB);
 
-    if (_id) {
-      const customerId = parseInt(_id, 10);
+    if (_id || id) {
+      const customerId = parseInt(_id || id, 10);
       const existing = await env.DB.prepare('SELECT id FROM customers WHERE id = ?1').bind(customerId).first();
       if (!existing) return json({ success: false, error: 'Customer not found.' }, 404);
 
@@ -126,17 +124,14 @@ export async function onRequestPost({ request, env }) {
       const params = [];
       const updates = [];
 
-      if (name !== undefined) { updates.push('name = ?' + (params.length + 1)); params.push(name.trim()); }
+      if (name !== undefined || full_name !== undefined) { updates.push('full_name = ?' + (params.length + 1)); params.push((customerName || '').trim()); }
       if (phone !== undefined) { updates.push('phone = ?' + (params.length + 1)); params.push(phone.trim()); }
       if (email !== undefined) { updates.push('email = ?' + (params.length + 1)); params.push(email.trim()); }
-      if (login_id !== undefined) { updates.push('login_id = ?' + (params.length + 1)); params.push(login_id.trim()); }
+      if (login_id !== undefined) { updates.push('login_id = ?' + (params.length + 1)); params.push(login_id === null || login_id === '' ? null : String(login_id).trim()); }
       if (address !== undefined) { updates.push('address = ?' + (params.length + 1)); params.push(address.trim()); }
-      if (type !== undefined) { updates.push('type = ?' + (params.length + 1)); params.push(type); }
-      if (password !== undefined) { updates.push('password = ?' + (params.length + 1)); params.push(password.trim()); }
-      if (panNo !== undefined) { updates.push('panNo = ?' + (params.length + 1)); params.push(panNo.trim()); }
-      if (alternativeAddress !== undefined) { updates.push('alternativeAddress = ?' + (params.length + 1)); params.push(alternativeAddress.trim()); }
-      if (alternativePhone !== undefined) { updates.push('alternativePhone = ?' + (params.length + 1)); params.push(alternativePhone.trim()); }
-         if (body.productToBuy !== undefined) { updates.push('productToBuy = ?' + (params.length + 1)); params.push((body.productToBuy || '').trim()); }
+      if (panNo !== undefined || pan_no !== undefined) { updates.push('pan_no = ?' + (params.length + 1)); params.push(customerPan); }
+      if (loyalty_points !== undefined) { updates.push('loyalty_points = ?' + (params.length + 1)); params.push(Number(loyalty_points || 0)); }
+      if (opening_balance !== undefined) { updates.push('opening_balance = ?' + (params.length + 1)); params.push(Number(opening_balance || 0)); }
 
       if (updates.length === 0) return json({ success: true });
 
@@ -144,62 +139,59 @@ export async function onRequestPost({ request, env }) {
       params.push(customerId);
       await env.DB.prepare(query).bind(...params).run();
 
-      const updated = await env.DB.prepare('SELECT id, name, phone, email, login_id, address, type, password, panNo, alternativeAddress, alternativePhone FROM customers WHERE id = ?1').bind(customerId).first();
+      const updated = await env.DB.prepare('SELECT id, full_name, phone, email, login_id, address, pan_no, loyalty_points, opening_balance FROM customers WHERE id = ?1').bind(customerId).first();
       return json({
         success: true,
         customer: {
           _id: String(updated.id),
-          name: updated.name,
+          id: String(updated.id),
+          name: updated.full_name,
+          full_name: updated.full_name,
           phone: updated.phone,
           email: updated.email || '',
-          login_id: updated.login_id || '',
+          login_id: updated.login_id ? String(updated.login_id) : '',
           address: updated.address || '',
-          type: updated.type || 'retail',
-          password: updated.password || updated.phone || '12345',
-          panNo: updated.panNo || '',
-          alternativeAddress: updated.alternativeAddress || '',
-          alternativePhone: updated.alternativePhone || '',
+          panNo: updated.pan_no || '',
+          pan_no: updated.pan_no || '',
+          loyalty_points: Number(updated.loyalty_points || 0),
+          opening_balance: Number(updated.opening_balance || 0),
         }
       });
     }
 
-    if (!name || !phone) {
+    if (!customerName || !phone) {
       return json({ success: false, error: 'Name and phone number are required.' }, 400);
     }
 
-    const passVal = (password || phone).trim();
-
     await env.DB.prepare(
-        'INSERT INTO customers (name, phone, email, login_id, address, productToBuy, type, password, panNo, alternativeAddress, alternativePhone) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)'
+        'INSERT INTO customers (full_name, phone, email, login_id, address, pan_no, loyalty_points, opening_balance) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)'
     ).bind(
-      name.trim(),
+      customerName,
       phone.trim(),
       (email || '').trim(),
-      (login_id || '').trim(),
+      (login_id || null),
       (address || '').trim(),
-         (productToBuy || '').trim(),
-      type || 'retail',
-      passVal,
-      (panNo || '').trim(),
-      (alternativeAddress || '').trim(),
-      (alternativePhone || '').trim()
+      customerPan,
+      Number(loyalty_points || 0),
+      Number(opening_balance || 0)
     ).run();
 
-    const created = await env.DB.prepare('SELECT id, name, phone, email, login_id, address, type, password, panNo, alternativeAddress, alternativePhone FROM customers WHERE name = ?1 AND phone = ?2 ORDER BY id DESC').bind(name.trim(), phone.trim()).first();
+    const created = await env.DB.prepare('SELECT id, full_name, phone, email, login_id, address, pan_no, loyalty_points, opening_balance FROM customers WHERE full_name = ?1 AND phone = ?2 ORDER BY id DESC').bind(customerName, phone.trim()).first();
     return json({
       success: true,
       customer: {
         _id: String(created.id),
-        name: created.name,
+        id: String(created.id),
+        name: created.full_name,
+        full_name: created.full_name,
         phone: created.phone,
         email: created.email || '',
-        login_id: created.login_id || '',
+        login_id: created.login_id ? String(created.login_id) : '',
         address: created.address || '',
-        type: created.type || 'retail',
-        password: created.password || created.phone || '12345',
-        panNo: created.panNo || '',
-        alternativeAddress: created.alternativeAddress || '',
-        alternativePhone: created.alternativePhone || '',
+        panNo: created.pan_no || '',
+        pan_no: created.pan_no || '',
+        loyalty_points: Number(created.loyalty_points || 0),
+        opening_balance: Number(created.opening_balance || 0),
       }
     });
   } catch (err) {

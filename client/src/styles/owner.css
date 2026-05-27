@@ -117,6 +117,87 @@
   box-shadow: 0 16px 30px rgba(10, 15, 30, 0.24);
 }
 
+/* Prevent easy saving/copying of images: overlay and disable selection/dragging.
+   NOTE: This only raises the bar in-browser. Screenshots cannot be reliably prevented.
+*/
+.no-export {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+.no-export img {
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none; /* prevent direct interaction with the image */
+}
+.no-export-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: transparent;
+}
+
+.owner-hero-photo,
+.owner-profile-photo,
+.owner-photo-modal-card {
+  position: relative; /* ensure overlay positions correctly */
+  overflow: hidden; /* clip canvas to circular ring */
+}
+
+/* Ensure canvas fills the inner area (accounting for padding) and is clipped by parent */
+.no-export canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  box-sizing: border-box !important;
+  border-radius: inherit !important;
+}
+
+/* Page-only protected watermark */
+#owner.protected::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2400;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='120'><text x='0' y='20' fill='%23000' fill-opacity='0.04' font-size='14' font-family='Arial'>© Dhakal Traders & Suppliers</text></svg>");
+  background-repeat: repeat;
+  transform: rotate(-18deg) scale(1.1);
+  background-size: 240px 120px;
+  mix-blend-mode: multiply;
+}
+
+/* blurred state when page hidden to deter quick screenshotting when switching */
+.blurred {
+  filter: blur(8px) grayscale(0.6) contrast(0.9);
+}
+
+/* print / screenshot blackout overlay */
+#owner.protected.print-block::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #000;
+}
+
+@media print {
+  /* ensure owner section prints as black box */
+  #owner.protected.print-block, #owner.protected.print-block * {
+    visibility: hidden !important;
+  }
+  #owner.protected.print-block::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #000;
+    visibility: visible !important;
+  }
+}
+
 .owner-hero-photo img {
   display: block;
   width: 100%;

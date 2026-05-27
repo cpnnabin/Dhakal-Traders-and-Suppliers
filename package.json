@@ -15,5 +15,9 @@
   "devDependencies": {
     "concurrently": "^8.2.2",
     "wrangler": "^3.114.17"
+  },
+  "dependencies": {
+    "minio": "^8.0.7",
+    "multer": "^2.1.1"
   }
 }

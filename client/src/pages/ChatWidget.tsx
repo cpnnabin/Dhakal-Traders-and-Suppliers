@@ -19,10 +19,20 @@ export default function ChatWidget() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [customer, setCustomer] = useState<any>(null);
 
+  const normalizeCustomer = (raw: any) => {
+    if (!raw) return null;
+    const id = raw.id || raw._id || raw.customerId || raw.login_id || '';
+    const name = raw.name || raw.display_name || raw.displayName || raw.cashier || '';
+    const phone = raw.phone || raw.mobile || '';
+    const email = raw.email || '';
+    const login_id = raw.login_id || raw.loginId || raw.username || email || phone || '';
+    return { ...raw, id, name, phone, email, login_id };
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem('dhakal_customer');
     if (stored) {
-      setCustomer(JSON.parse(stored));
+      setCustomer(normalizeCustomer(JSON.parse(stored)));
     }
   }, [isOpen]);
 
@@ -34,7 +44,7 @@ export default function ChatWidget() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          setMessages(data.chats);
+          setMessages(Array.isArray(data.chats) ? data.chats : []);
         }
       });
 

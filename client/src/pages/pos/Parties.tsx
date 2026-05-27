@@ -17,6 +17,19 @@ function NRS(n: number) {
   return 'रू ' + n.toLocaleString('en-NP', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Normalization helpers (prefer new schema fields, fallback to legacy)
+const saleRef = (s: any) => String(s.invoice_no || s.id || '');
+const saleDate = (s: any) => String(s.bill_date || s.date || s.created_at || s.createdAt || '');
+const saleAmount = (s: any) => Number(s.total ?? s.net_amount ?? s.gross_amount ?? 0);
+const saleAmountPaid = (s: any) => Number(s.amountPaid ?? s.paid_amount ?? s.paid ?? 0);
+const saleAmountDue = (s: any) => Number(s.amountDue ?? s.due_amount ?? s.due ?? 0);
+const saleCustomerName = (s: any) => String(s.customerName || s.full_name || s.customer || 'Walk-in');
+
+const purchaseRef = (p: any) => String(p.bill_no || p.id || '');
+const purchaseDate = (p: any) => String(p.purchase_date || p.date || p.created_at || p.createdAt || '');
+const purchaseTotal = (p: any) => Number(p.total ?? p.net_amount ?? 0);
+const purchasePartyName = (p: any) => String(p.farmerName || p.supplierName || p.supplier_name || 'Supplier');
+
 function formatPrintDate(d: string) {
   if (!d) return '-';
   // try to parse ISO or datetime strings and show compact date+time
@@ -421,14 +434,14 @@ export default function PartiesPage() {
     }
 
     if (party.type === 'customer') {
-      const partySales: SaleRecord[] = (sales || []).filter((s: SaleRecord) => s.customerId === party.id || s.customerName === party.name);
+      const partySales: SaleRecord[] = (sales || []).filter((s: SaleRecord) => s.customerId === party.id || s.customerLoginId === party.id || ((s.customerName) || (s as any).full_name) === party.name);
       partySales.forEach(s => {
-        rows.push({ date: s.date, ref: s.id, desc: `${t('बिक्री', 'Sale')} — ${s.items.map(i => i.name).join(', ')}`, debit: s.total, credit: s.amountPaid, balance: s.amountDue, type: 'sale', sourceType: 'sale', sourceId: s.id, partyName: s.customerName || party.name });
+        rows.push({ date: saleDate(s), ref: saleRef(s), desc: `${t('बिक्री', 'Sale')} — ${ (s.items || []).map((i:any) => (i.name || (i as any).productName)).join(', ') }`, debit: saleAmount(s), credit: saleAmountPaid(s), balance: saleAmountDue(s), type: 'sale', sourceType: 'sale', sourceId: saleRef(s), partyName: saleCustomerName(s) || party.name });
       });
     } else {
-      const partyPurchases: FarmerPurchase[] = (purchases || []).filter((p: FarmerPurchase) => p.partyId === party.id || p.farmerName === party.name);
+      const partyPurchases: FarmerPurchase[] = (purchases || []).filter((p: FarmerPurchase) => p.partyId === party.id || ((p.farmerName) || (p as any).supplierName) === party.name);
       partyPurchases.forEach(p => {
-        rows.push({ date: p.date, ref: p.id, desc: `${t('खरिद', 'Purchase')} — ${p.productName}`, debit: p.total, credit: 0, balance: p.total, type: 'purchase', sourceType: 'purchase', sourceId: p.id, partyName: p.farmerName });
+        rows.push({ date: purchaseDate(p), ref: purchaseRef(p), desc: `${t('खरिद', 'Purchase')} — ${p.productName || (p as any).product_name || ''}`, debit: purchaseTotal(p), credit: 0, balance: purchaseTotal(p), type: 'purchase', sourceType: 'purchase', sourceId: purchaseRef(p), partyName: purchasePartyName(p) });
       });
     }
 
@@ -506,16 +519,16 @@ export default function PartiesPage() {
       if (!sale) return;
       setEditTarget({ kind: 'sale', sale });
       setEditSaleForm({
-        date: String(sale.date || '').split(' ')[0],
-        customerName: sale.customerName || '',
-        customerPhone: sale.customerPhone || '',
-        paymentMode: sale.paymentMode || 'Cash',
+        date: saleDate(sale).split(' ')[0],
+        customerName: saleCustomerName(sale) || '',
+        customerPhone: sale.customerPhone || sale.phone || '',
+        paymentMode: (sale.paymentMode || sale.payment_mode || 'Cash'),
         discount: sale.discount || 0,
         taxPct: Math.round((Number(sale.tax || 0) / Math.max(1, Number(sale.subtotal || 0) - Number(sale.discount || 0))) * 100),
-        amountPaid: String(sale.amountPaid ?? 0),
-        amountDue: String(sale.amountDue ?? 0),
+        amountPaid: String(saleAmountPaid(sale) ?? 0),
+        amountDue: String(saleAmountDue(sale) ?? 0),
         note: sale.note || '',
-        items: (sale.items || []).map((it: any) => ({ productId: it.productId, name: it.name, rate: Number(it.rate || 0), qty: Number(it.qty || 0), unit: it.unit, total: Number(it.total || 0) })),
+        items: (sale.items || []).map((it: any) => ({ productId: it.productId, name: it.name || (it as any).productName, rate: Number(it.rate || 0), qty: Number(((it.qty ?? (it as any).qtyKg) || 0)), unit: it.unit, total: Number(it.total || 0) })),
       });
       setEditProductQuery('');
       setEditQuickQty(1);

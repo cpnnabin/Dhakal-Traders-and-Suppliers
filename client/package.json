@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "vitest",
     "preview": "vite preview",
     "db:setup:remote": "wrangler d1 execute dhakaltraders --remote --config ../wrangler.toml --file=../database/setup.sql",
     "deploy": "wrangler pages publish ./client/dist"
   },
   "dependencies": {
     "@types/html2canvas": "^0.5.35",
+    "axios": "^1.16.1",
+    "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.45.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
@@ -25,7 +28,11 @@
     "@types/react": "^18.3.29",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "vitest": "^0.34.3"
   }
 }

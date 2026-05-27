@@ -154,6 +154,10 @@ export async function onRequestPost({ request, env }) {
         updates.push('avatar = ?' + (params.length + 1));
         params.push(avatar);
       }
+      if (profilePhoto !== undefined) {
+        updates.push('profile_photo = ?' + (params.length + 1));
+        params.push(profilePhoto);
+      }
       if (password !== undefined && password.trim() !== '') {
         // Use user email as salt for hashing new password
         const targetEmail = username !== undefined ? username.trim().toLowerCase() : existing.email;

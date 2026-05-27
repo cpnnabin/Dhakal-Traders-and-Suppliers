@@ -1,3 +1,5 @@
+import bcrypt from 'bcryptjs';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -30,18 +32,21 @@ export async function onRequestPost({ request, env }) {
 
   try {
     const customer = await env.DB.prepare(
-      'SELECT id, email, display_name, role, phone, password_hash FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR phone = ?2) ORDER BY id DESC'
+      'SELECT id, username, full_name, email, role, phone, password_hash FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR LOWER(username) = LOWER(?2) OR phone = ?2) ORDER BY id DESC'
     ).bind('customer', loginId).first();
 
     if (!customer) return json({ success: false, error: 'Invalid credentials.' }, 401);
 
     const expected = String(customer.password_hash || '');
-    const canonicalLoginId = customer.email || customer.phone || loginId;
-    const provided = await sha256Hex(password + canonicalLoginId.toLowerCase());
-    if (expected !== provided) return json({ success: false, error: 'Invalid credentials.' }, 401);
+    const canonicalLoginId = customer.username || customer.email || customer.phone || loginId;
+    const sha256Provided = await sha256Hex(password + canonicalLoginId.toLowerCase());
+    const valid = expected.startsWith('$2')
+      ? bcrypt.compareSync(password, expected)
+      : expected === sha256Provided;
+    if (!valid) return json({ success: false, error: 'Invalid credentials.' }, 401);
 
     const profile = await env.DB.prepare(
-      'SELECT id, login_id, name, phone, email FROM customers WHERE login_id = ?1'
+      'SELECT id, login_id, full_name, phone, email FROM customers WHERE login_id = ?1'
     ).bind(customer.id).first();
 
     return json({
@@ -49,8 +54,9 @@ export async function onRequestPost({ request, env }) {
       customer: {
         id: String(profile?.id || customer.id),
         _id: String(profile?.id || customer.id),
-        login_id: customer.email || customer.phone || loginId,
-        name: profile?.name || customer.display_name || '',
+        login_id: String(customer.id),
+        name: profile?.full_name || customer.full_name || '',
+        full_name: profile?.full_name || customer.full_name || '',
         phone: profile?.phone || customer.phone || '',
         email: profile?.email || customer.email || '',
       },

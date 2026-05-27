@@ -2,8 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import 'remixicon/fonts/remixicon.css';
+import './tailwind.css';
 import './styles.css';
 import './site';
+import './utils/clientDiagnostics';
 import dhakalLogo from './image/Dhakal Traders Logo .png';
 
 const setAppFavicon = () => {

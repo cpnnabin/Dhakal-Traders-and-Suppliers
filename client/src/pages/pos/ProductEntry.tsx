@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePOS } from './POSContext';
 import { Product } from './posTypes';
+import ImageUpload from '../../components/ImageUpload';
 
 const EMOJIS = ['📦','🌿','🫚','🌾','🥫','🌻','🍃','🧂','🫙','🫛','🍵','🥜','🧴','🌶️','🫑'];
 
@@ -24,6 +25,7 @@ export default function ProductEntryPage() {
   const [cat,      setCat]      = useState<Product['category']>('herbs');
   const [expiry,   setExpiry]   = useState('');
   const [batch,    setBatch]    = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -46,7 +48,7 @@ export default function ProductEntryPage() {
       nameEn: nameEn.trim(), nameNe: nameNe.trim(),
       category: cat, stock, unit,
       purchasePrice: purPrice, sellingPrice: selPrice, emoji,
-      expiryDate: expiry, batchNo: batch
+      expiryDate: expiry, batchNo: batch, imageUrl
     };
     const res = await apiCall('/products', 'POST', next);
     const saved = res.success ? res.product : next;
@@ -64,13 +66,13 @@ export default function ProductEntryPage() {
 
   const resetForm = () => {
     setNameEn(''); setNameNe(''); setId(''); setStock(0); setPurPrice(0); setSelPrice(0);
-    setExpiry(''); setBatch(''); setEditingId(null); setEmoji('📦'); setCat('herbs');
+    setExpiry(''); setBatch(''); setImageUrl(''); setEditingId(null); setEmoji('📦'); setCat('herbs');
   };
 
   const handleEdit = (p: Product) => {
     setEditingId(p.id); setId(p.id); setNameEn(p.nameEn); setNameNe(p.nameNe); setUnit(p.unit);
     setStock(p.stock); setPurPrice(p.purchasePrice); setSelPrice(p.sellingPrice);
-    setEmoji(p.emoji); setCat(p.category); setExpiry(p.expiryDate || ''); setBatch(p.batchNo || '');
+    setEmoji(p.emoji); setCat(p.category); setExpiry(p.expiryDate || ''); setBatch(p.batchNo || ''); setImageUrl(p.imageUrl || p.image || '');
     setTab('add');
   };
 
@@ -294,6 +296,15 @@ export default function ProductEntryPage() {
                 <label>{t('ब्याच नं', 'Batch No.')}</label>
                 <input type="text" className="pos-form-input" value={batch} onChange={e => setBatch(e.target.value)} placeholder={t('ऐच्छिक', 'Optional')} />
               </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <ImageUpload
+                title={t('उत्पादन फोटो', 'Product Image')}
+                initialImageUrl={imageUrl || ''}
+                buttonLabel={t('फोटो अपलोड', 'Upload Product Image')}
+                onUploaded={(url) => setImageUrl(url)}
+              />
             </div>
 
             <div className="form-actions">

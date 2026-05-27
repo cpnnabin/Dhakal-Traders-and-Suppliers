@@ -88,3 +88,18 @@
   .users-grid { grid-template-columns: 1fr; }
   .users-toolbar { flex-direction: column; align-items: stretch; }
 }
+
+/* Compact single-div per user list */
+.user-line { display: flex; gap: 12px; align-items: center; padding: 10px 12px; background: var(--pos-card-bg); border: 1px solid var(--pos-card-border); border-radius: 8px; }
+.user-line .ul-avatar { width: 44px; height: 44px; border-radius: 8px; font-size: 18px; display:flex; align-items:center; justify-content:center; }
+.user-line .ul-content { flex: 1; min-width: 0; }
+.ul-top { display:flex; gap:8px; align-items:center; }
+.ul-name { font-weight:700; }
+.ul-username { color:var(--pos-text-muted); font-size:13px; }
+.ul-bottom { color:var(--pos-text-muted); font-size:13px; margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; }
+.ul-right { display:flex; flex-direction:column; gap:6px; align-items:flex-end; flex-shrink:0; }
+.user-line--purple { border-left: 4px solid #A78BFA; }
+.user-line--blue { border-left: 4px solid #60A5FA; }
+.user-line--green { border-left: 4px solid var(--pos-success); }
+.user-line--yellow { border-left: 4px solid #F59E0B; }
+.user-line--orange { border-left: 4px solid #F97316; }

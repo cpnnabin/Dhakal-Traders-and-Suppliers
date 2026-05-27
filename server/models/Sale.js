@@ -14,7 +14,7 @@ const saleSchema = new mongoose.Schema({
   date: { type: String, required: true },
   cashier: { type: String, required: true },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
-  paymentMode: { type: String, enum: ['Cash', 'eSewa', 'Bank'], default: 'Cash' },
+  paymentMode: { type: String, enum: ['Cash', 'Card', 'eSewa', 'Khalti', 'QR', 'Credit', 'Bank'], default: 'Cash' },
   customerName: { type: String },
   customerAddress: { type: String },
   customerPan: { type: String },

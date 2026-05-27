@@ -30,7 +30,7 @@ async function safeFetch(path: string, opts?: RequestInit) {
 export const inventoryService = {
   async listProducts(): Promise<Product[]> {
     const j = await safeFetch('/api/products');
-    if (j && j.success && Array.isArray(j.products)) return j.products.map((p: any) => ({ id: p.id, name: p.nameEn || p.name || '', sku: p.sku || '', category: p.category || '', brand: '', unit: p.unit || '', costPrice: p.purchasePrice || 0, sellingPrice: p.sellingPrice || 0, stock: p.stock || 0, minStock: p.minStock || 0 }));
+    if (j && j.success && Array.isArray(j.products)) return j.products.map((p: any) => ({ id: p.id, name: p.nameEn || p.name || '', sku: p.sku || '', category: p.category || '', brand: '', unit: p.unit || '', costPrice: p.purchasePrice || 0, sellingPrice: p.sellingPrice || 0, stock: p.stock || 0, minStock: p.minStock || 0, imageUrl: p.imageUrl || p.image || '' }));
     // fallback to localStorage
     try { const raw = localStorage.getItem('dt_inventory_products'); return raw ? JSON.parse(raw) : []; } catch { return []; }
   },
@@ -41,7 +41,7 @@ export const inventoryService = {
   },
   async createProduct(p: Product): Promise<Product> {
     const body = {
-      id: p.id, nameEn: p.name, nameNe: p.name, category: p.category || '', stock: p.stock || 0, unit: p.unit || '', purchasePrice: p.costPrice || 0, sellingPrice: p.sellingPrice || 0, emoji: '📦', minStock: p.minStock || 0
+      id: p.id, nameEn: p.name, nameNe: p.name, category: p.category || '', stock: p.stock || 0, unit: p.unit || '', purchasePrice: p.costPrice || 0, sellingPrice: p.sellingPrice || 0, emoji: '📦', minStock: p.minStock || 0, imageUrl: p.imageUrl || ''
     };
     const j = await safeFetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (j && j.success) return j.product;

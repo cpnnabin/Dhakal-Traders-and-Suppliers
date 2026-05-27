@@ -115,6 +115,8 @@ export const ownerProfile = {
   contact: {
     phone: '+977-9857823400',
     email: 'dipak.sharma@dhakaltradersandsuppliers.com.np',
+    // profilePhoto can be a URL served from MinIO or another CDN. Update when owner image is uploaded.
+    profilePhoto: 'http://127.0.0.1:9000/images/1779810387017-resized.jpg',
     website: 'https://dhakaltradersandsuppliers.com.np',
     details: getOwnerContactDetails(),
     currentLocation: {

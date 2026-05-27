@@ -11,13 +11,11 @@ export interface AccountDef {
 }
 
 export const ACCOUNTS: Record<string, AccountDef> = {
-  '1001': { code: '1001', nameNe: 'नगद / बैंक', nameEn: 'Cash & Bank' },
-  '1002': { code: '1002', nameNe: 'प्राप्य रकम', nameEn: 'Accounts Receivable' },
-  '2001': { code: '2001', nameNe: 'भ्याट देय', nameEn: 'VAT Payable' },
-  '2002': { code: '2002', nameNe: 'देय रकम', nameEn: 'Accounts Payable' },
-  '4001': { code: '4001', nameNe: 'बिक्री आम्दानी', nameEn: 'Sales Revenue' },
-  '4002': { code: '4002', nameNe: 'बिक्री छुट', nameEn: 'Sales Discount' },
-  '6001': { code: '6001', nameNe: 'किसान खरिद (COGS)', nameEn: 'Farmer Purchase (COGS)' },
+  '1000': { code: '1000', nameNe: 'नगद', nameEn: 'Cash' },
+  '1100': { code: '1100', nameNe: 'बैंक', nameEn: 'Bank' },
+  '2000': { code: '2000', nameNe: 'देय रकम', nameEn: 'Accounts Payable' },
+  '3000': { code: '3000', nameNe: 'बिक्री आम्दानी', nameEn: 'Sales Revenue' },
+  '4000': { code: '4000', nameNe: 'खरिद', nameEn: 'Purchases' },
 };
 
 export interface JournalLine {
@@ -67,12 +65,40 @@ function parseSortKey(dateStr: string, fallbackIndex: number): number {
   return Number.isNaN(parsed) ? fallbackIndex : parsed;
 }
 
+function saleRef(s: any): string {
+  return String(s.invoice_no || s.id || '');
+}
+
+function saleDate(s: any): string {
+  return String(s.bill_date || s.date || s.created_at || s.createdAt || '');
+}
+
+function purchaseRef(p: any): string {
+  return String(p.bill_no || p.id || '');
+}
+
+function purchaseDate(p: any): string {
+  return String(p.purchase_date || p.date || p.created_at || p.createdAt || '');
+}
+
+function salePartyName(s: any): string {
+  return String(s.customerName || s.full_name || s.customer || s.customerPhone || s.customerLoginId || 'Walk-in sale');
+}
+
+function purchasePartyName(p: any): string {
+  return String(p.farmerName || p.supplierName || p.supplier_name || 'Supplier');
+}
+
+function purchaseQty(p: any): number {
+  return Number(p.qtyKg ?? p.qty ?? 0);
+}
+
 function isCreditSale(s: SaleRecord): boolean {
-  return String(s.paymentMode || '').trim().toLowerCase() === 'credit';
+  return String((s as any).paymentMode || (s as any).payment_mode || '').trim().toLowerCase() === 'credit';
 }
 
 function isCreditPurchase(p: FarmerPurchase): boolean {
-  return String(p.paymentMode || '').trim().toLowerCase() === 'credit';
+  return String((p as any).paymentMode || (p as any).payment_mode || '').trim().toLowerCase() === 'credit';
 }
 
 function accountSortKey(code: string): number {
@@ -85,37 +111,40 @@ export function buildJournalLines(sales: SaleRecord[], purchases: FarmerPurchase
   const lines: JournalLine[] = [];
 
   sales.forEach((s, i) => {
-    const sortKey = parseSortKey(s.date, i);
-    const revenue = Math.max(0, s.subtotal - s.discount);
-    const partyName = s.customerName || s.customerLoginId || s.customerPhone || 'Walk-in sale';
-    const paymentMode = s.paymentMode || 'Cash';
-    const particulars = s.customerName
-      ? `${s.id} — ${s.customerName}`
-      : `${s.id} — ${paymentMode}`;
+    const sale: any = s;
+    const sortKey = parseSortKey(saleDate(sale), i);
+    const total = Number(sale.total || sale.net_amount || 0);
+    const tax = Number(sale.tax || sale.vat_amount || 0);
+    const discount = Number(sale.discount || sale.discount_amount || 0);
+    const revenue = Math.max(0, total - tax);
+    const partyName = salePartyName(sale);
+    const paymentMode = String(sale.paymentMode || sale.payment_mode || 'Cash');
+    const ref = saleRef(sale);
+    const particulars = sale.customerName || sale.full_name ? `${ref} — ${salePartyName(sale)}` : `${ref} — ${paymentMode}`;
 
-    if (s.total > 0) {
+    if (total > 0) {
       lines.push({
-        lineId: `${s.id}-d-receivable`,
-        voucherId: s.id,
+        lineId: `${ref}-d-receivable`,
+        voucherId: ref,
         voucherType: 'sale',
-        date: s.date,
+        date: saleDate(sale),
         sortKey,
-        accountCode: isCreditSale(s) ? '1002' : '1001',
+        accountCode: isCreditSale(sale) ? '2000' : (paymentMode.toLowerCase().includes('bank') ? '1100' : '1000'),
         partyName,
         paymentMode,
         particulars,
-        debit: s.total,
+        debit: total,
         credit: 0,
       });
     }
     if (revenue > 0) {
       lines.push({
-        lineId: `${s.id}-c-sales`,
-        voucherId: s.id,
+        lineId: `${ref}-c-sales`,
+        voucherId: ref,
         voucherType: 'sale',
-        date: s.date,
+        date: saleDate(sale),
         sortKey,
-        accountCode: '4001',
+        accountCode: '3000',
         partyName,
         paymentMode,
         particulars,
@@ -123,70 +152,73 @@ export function buildJournalLines(sales: SaleRecord[], purchases: FarmerPurchase
         credit: revenue,
       });
     }
-    if (s.tax > 0) {
+    if (tax > 0) {
       lines.push({
-        lineId: `${s.id}-c-vat`,
-        voucherId: s.id,
+        lineId: `${ref}-c-vat`,
+        voucherId: ref,
         voucherType: 'sale',
-        date: s.date,
+        date: saleDate(sale),
         sortKey,
-        accountCode: '2001',
+        accountCode: '2000',
         partyName,
         paymentMode,
         particulars,
         debit: 0,
-        credit: s.tax,
+        credit: tax,
       });
     }
-    if (s.discount > 0) {
+    if (discount > 0) {
       lines.push({
-        lineId: `${s.id}-d-disc`,
-        voucherId: s.id,
+        lineId: `${ref}-d-disc`,
+        voucherId: ref,
         voucherType: 'sale',
-        date: s.date,
+        date: saleDate(sale),
         sortKey,
-        accountCode: '4002',
+        accountCode: '3000',
         partyName,
         paymentMode,
         particulars,
-        debit: s.discount,
+        debit: discount,
         credit: 0,
       });
     }
   });
 
   purchases.forEach((p, i) => {
-    const sortKey = parseSortKey(p.date, 10000 + i);
-    const partyName = p.farmerName;
-    const paymentMode = p.paymentMode || 'Cash';
-    const particulars = `${p.id} — ${p.farmerName} (${p.productName}, ${p.qtyKg} kg)`;
+    const purchase: any = p;
+    const sortKey = parseSortKey(purchaseDate(purchase), 10000 + i);
+    const total = Number(purchase.total || purchase.net_amount || 0);
+    const partyName = purchasePartyName(purchase);
+    const paymentMode = String(purchase.paymentMode || purchase.payment_mode || 'Cash');
+    const ref = purchaseRef(purchase);
+    const particulars = `${ref} — ${partyName} (${String(purchase.productName || purchase.product_name || '' )}, ${purchaseQty(purchase)} kg)`;
 
-    if (p.total > 0) {
+    if (total > 0) {
       lines.push({
-        lineId: `${p.id}-d-pur`,
-        voucherId: p.id,
+        lineId: `${ref}-d-pur`,
+        voucherId: ref,
         voucherType: 'purchase',
-        date: p.date,
+        date: purchaseDate(purchase),
         sortKey,
-        accountCode: '6001',
+        accountCode: '4000',
         partyName,
         paymentMode,
         particulars,
-        debit: p.total,
+        debit: total,
         credit: 0,
       });
       lines.push({
-        lineId: `${p.id}-c-cash`,
-        voucherId: p.id,
+        lineId: `${ref}-c-cash`,
+        voucherId: ref,
         voucherType: 'purchase',
-        date: p.date,
+        date: purchaseDate(purchase),
         sortKey,
-        accountCode: isCreditPurchase(p) ? '2002' : '1001',
+        accountCode: isCreditPurchase(purchase) ? '2000' : (paymentMode.toLowerCase().includes('bank') ? '1100' : '1000'),
         partyName,
         paymentMode,
         particulars,
         debit: 0,
-        credit: p.total,
+        credit: total,
       });
     }
   });
@@ -199,34 +231,42 @@ export function buildCashBook(sales: SaleRecord[], purchases: FarmerPurchase[]):
   const rows: Omit<CashBookRow, 'balance'>[] = [];
 
   sales.forEach((s, i) => {
-    if (isCreditSale(s)) return;
+    const sale: any = s;
+    if (isCreditSale(sale)) return;
+    const ref = saleRef(sale);
+    const date = saleDate(sale);
+    const total = Number(sale.total || sale.net_amount || 0);
     rows.push({
-      id: `cb-${s.id}`,
-      date: s.date,
-      sortKey: parseSortKey(s.date, i),
-      ref: s.id,
+      id: `cb-${ref}`,
+      date,
+      sortKey: parseSortKey(date, i),
+      ref,
       type: 'sale',
-      partyName: s.customerName || s.customerLoginId || s.customerPhone || 'Walk-in sale',
-      paymentMode: s.paymentMode || 'Cash',
-      particulars: `${tSaleLabel(s)} — NRS ${s.total.toLocaleString()}`,
-      receipt: s.total,
+      partyName: salePartyName(sale),
+      paymentMode: String(sale.paymentMode || sale.payment_mode || 'Cash'),
+      particulars: `${tSaleLabel(sale)} — NRS ${total.toLocaleString()}`,
+      receipt: total,
       payment: 0,
     });
   });
 
   purchases.forEach((p, i) => {
-    if (isCreditPurchase(p)) return;
+    const purchase: any = p;
+    if (isCreditPurchase(purchase)) return;
+    const ref = purchaseRef(purchase);
+    const date = purchaseDate(purchase);
+    const total = Number(purchase.total || purchase.net_amount || 0);
     rows.push({
-      id: `cb-${p.id}`,
-      date: p.date,
-      sortKey: parseSortKey(p.date, 10000 + i),
-      ref: p.id,
+      id: `cb-${ref}`,
+      date,
+      sortKey: parseSortKey(date, 10000 + i),
+      ref,
       type: 'purchase',
-      partyName: p.farmerName,
-      paymentMode: p.paymentMode || 'Cash',
-      particulars: `${p.farmerName} — ${p.productName} (${p.qtyKg} kg)`,
+      partyName: purchasePartyName(purchase),
+      paymentMode: String(purchase.paymentMode || purchase.payment_mode || 'Cash'),
+      particulars: `${purchasePartyName(purchase)} — ${String(purchase.productName || purchase.product_name || '')} (${purchaseQty(purchase)} kg)`,
       receipt: 0,
-      payment: p.total,
+      payment: total,
     });
   });
 
@@ -239,15 +279,14 @@ export function buildCashBook(sales: SaleRecord[], purchases: FarmerPurchase[]):
   }).reverse();
 }
 
-function tSaleLabel(s: SaleRecord): string {
-  return s.customerName || s.cashier || 'Walk-in sale';
+function tSaleLabel(s: any): string {
+  return String(s.customerName || s.full_name || s.cashier || 'Walk-in sale');
 }
 
 export function summarizeLedger(sales: SaleRecord[], purchases: FarmerPurchase[]): LedgerSummary {
-  const cashBook = buildCashBook(sales, purchases);
   const journal = buildJournalLines(sales, purchases);
-  const totalReceipts = sales.reduce((a, s) => a + s.total, 0);
-  const totalPayments = purchases.reduce((a, p) => a + p.total, 0);
+  const totalReceipts = sales.reduce((a, s) => a + Number((s as any).total || (s as any).net_amount || 0), 0);
+  const totalPayments = purchases.reduce((a, p) => a + Number((p as any).total || (p as any).net_amount || 0), 0);
   return {
     totalReceipts,
     totalPayments,

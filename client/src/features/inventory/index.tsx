@@ -1,4 +1,5 @@
 export { default as InventoryDashboard } from './InventoryDashboard';
+export { default as InventoryHub } from './InventoryHub';
 export { default as ProductList } from './ProductList';
 export { default as ProductForm } from './ProductForm';
 export { default as StockList } from './StockList';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../../LanguageContext';
-import { Product, CartItem, SaleRecord, FarmerPurchase, INITIAL_PRODUCTS, INITIAL_PURCHASES, INITIAL_SALES, loadLS, saveLS, LS } from './posTypes';
+import { Product, CartItem, SaleRecord, FarmerPurchase, loadLS, saveLS, LS, normalizeProduct, normalizePurchaseRecord, normalizeSaleRecord, normalizeParty } from './posTypes';
 import { getPOSSession } from '../POSLogin';
 
 // ─── POS Global State Context ──────────────────────────────────────────────────
@@ -66,9 +66,28 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   const { lang } = useLanguage();
   const t = (ne: string, en: string) => (lang === 'en' ? en : ne);
 
-  const [products,     setProducts]     = React.useState<Product[]>(() => loadLS(LS.products, INITIAL_PRODUCTS));
-  const [purchases,    setPurchases]    = React.useState<FarmerPurchase[]>(() => loadLS(LS.purchases, INITIAL_PURCHASES));
-  const [sales,        setSales]        = React.useState<SaleRecord[]>(() => loadLS(LS.sales, INITIAL_SALES));
+  const [products,     setProducts]     = React.useState<Product[]>(() => loadLS(LS.products, []).map(normalizeProduct));
+  // Ensure initial product list is de-duplicated by id
+  const dedupeProducts = (arr: Product[]) => {
+    const m = new Map<string, Product>();
+    for (const p of arr || []) {
+      if (!p || !p.id) continue;
+      // prefer the latest occurrence
+      m.set(String(p.id), normalizeProduct(p));
+    }
+    return Array.from(m.values());
+  };
+  // canonicalize initial products
+  const [_initialProducts] = React.useState(() => {
+    try {
+      const raw = loadLS(LS.products, []) || [];
+      return dedupeProducts(raw);
+    } catch (e) { return []; }
+  });
+  // replace initial products state with deduped
+  React.useEffect(() => { setProducts(_initialProducts); }, []);
+  const [purchases,    setPurchases]    = React.useState<FarmerPurchase[]>(() => loadLS(LS.purchases, []).map(normalizePurchaseRecord));
+  const [sales,        setSales]        = React.useState<SaleRecord[]>(() => loadLS(LS.sales, []).map(normalizeSaleRecord));
   const [customers,    setCustomers]    = React.useState<any[]>([]);
   const [users,        setUsers]        = React.useState<any[]>([]);
   const [cart,         setCart]         = React.useState<CartItem[]>([]);
@@ -121,11 +140,10 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const expressDirect = `http://localhost:5001/api/pos${endpoint}`;
     const cloudflareUrl = `/api${endpoint}`;
 
-    // In production prefer Cloudflare Pages Functions endpoint only.
-    // Falling back to /api/pos (Express) is useful for local dev but
-    // on the hosted Pages site those routes often return 405. Keep
-    // production calls strictly to /api/* so Cloudflare Functions handle them.
-    const urls = isLocal ? [expressViaProxy, expressDirect] : [cloudflareUrl];
+    // In local dev prefer to call the backend server directly first to avoid
+    // Vite dev server proxy quirks (which may abort or return 500). In prod
+    // prefer Cloudflare Functions endpoint only.
+    const urls = isLocal ? [expressDirect, expressViaProxy] : [cloudflareUrl];
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (session.token) headers['x-pos-token'] = session.token;
@@ -192,25 +210,29 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     const fetchData = async () => {
       const pRes = await apiCall('/products');
       if (pRes.success && pRes.products && Array.isArray(pRes.products) && pRes.products.length > 0) {
-        setProducts(pRes.products);
-        saveLS(LS.products, pRes.products);
+        const normalizedProducts = pRes.products.map(normalizeProduct);
+        const deduped = dedupeProducts(normalizedProducts);
+        setProducts(deduped);
+        saveLS(LS.products, deduped);
       }
 
       const sRes = await apiCall('/sales');
       if (sRes.success && sRes.sales && Array.isArray(sRes.sales)) {
-        setSales(sRes.sales);
-        saveLS(LS.sales, sRes.sales);
+        const normalizedSales = sRes.sales.map(normalizeSaleRecord);
+        setSales(normalizedSales);
+        saveLS(LS.sales, normalizedSales);
       }
 
       const puRes = await apiCall('/purchases');
       if (puRes.success && puRes.purchases && Array.isArray(puRes.purchases)) {
-        setPurchases(puRes.purchases);
-        saveLS(LS.purchases, puRes.purchases);
+        const normalizedPurchases = puRes.purchases.map(normalizePurchaseRecord);
+        setPurchases(normalizedPurchases);
+        saveLS(LS.purchases, normalizedPurchases);
       }
 
       const cRes = await apiCall('/customers');
       if (cRes.success && cRes.customers && Array.isArray(cRes.customers)) {
-        setCustomers(cRes.customers);
+        setCustomers(cRes.customers.map((c: any) => normalizeParty(c, 'customer')));
       }
 
       const uRes = await apiCall('/users');

@@ -2,9 +2,20 @@
 import React from 'react';
 import { usePOS } from './POSContext';
 import { useEffect, useState } from 'react';
+import RoleDashboard from '../../features/sales/pos/RoleDashboard';
+import { getPOSSession } from '../POSLogin';
 
-export default function POSDashboardPage() {
+type Props = {
+  role?: string;
+};
+
+export default function POSDashboardPage({ role: roleProp }: Props) {
   const { products, purchases, sales, t } = usePOS();
+  const role = roleProp || getPOSSession().role || 'owner';
+
+  const saleInvoice = (s: any) => String(s.invoice_no || s.id || '');
+  const saleDate = (s: any) => String(s.bill_date || s.date || s.created_at || s.createdAt || '');
+  const saleCustomerName = (s: any) => String(s.customerName || s.full_name || 'Walk-in');
 
   const totalSales = sales.reduce((acc, s) => acc + s.total, 0);
   const totalPurchases = purchases.reduce((acc, p) => acc + p.total, 0);
@@ -30,24 +41,8 @@ export default function POSDashboardPage() {
     return bSales - aSales;
   }).slice(0, 5);
 
-  // Fallback sample list when products are not populated (useful in dev/demo)
-  const fallbackTop = [
-    { id: 'p1', emoji: '🌿', nameEn: 'Local Ginger', nameNe: 'Local Ginger', category: 'herbs', stock: 450 },
-    { id: 'p2', emoji: '🌾', nameEn: 'Traditional Hemp Seeds', nameNe: 'Traditional Hemp Seeds', category: 'herbs', stock: 140 },
-    { id: 'p3', emoji: '🫚', nameEn: 'Salyan Timur', nameNe: 'Salyan Timur', category: 'herbs', stock: 320 },
-    { id: 'p4', emoji: '🍃', nameEn: 'Mustard Oil', nameNe: 'Mustard Oil', category: 'daily', stock: 240 },
-    { id: 'p5', emoji: '🫙', nameEn: 'Fresh Garlic', nameNe: 'Fresh Garlic', category: 'herbs', stock: 200 },
-  ];
-
-  const displayTop = topSelling.length ? topSelling : fallbackTop;
-
-  // Fallback recent transactions
-  const fallbackSales = [
-    { id: 'S-9812', customerName: 'Ram Bahadur Basnet', date: '2026-05-19 10:14 AM', total: 1921, amountDue: 0 },
-    { id: 'S-9813', customerName: 'Dil Maya Gharti', date: '2026-05-18 04:30 PM', total: 2169.6, amountDue: 500 },
-  ];
-
-  const displaySales = sales && sales.length ? sales.slice(0,5) : fallbackSales;
+  const displayTop = topSelling;
+  const displaySales = sales.slice(0, 5);
 
   // Party Statement date range and Nepali conversion
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -87,9 +82,9 @@ export default function POSDashboardPage() {
     (async () => {
       const entries = displaySales.map(async (s) => {
         const anyS: any = s;
-        const id = anyS.id || anyS._id || JSON.stringify(anyS);
+        const id = saleInvoice(anyS) || anyS._id || JSON.stringify(anyS);
         // extract YYYY-MM-DD
-        const datePart = String(anyS.date || '').split(' ')[0].split('T')[0];
+        const datePart = String(saleDate(anyS)).split(' ')[0].split('T')[0];
         const nep = await convertToNepali(datePart || todayISO);
         return [id, nep];
       });
@@ -115,15 +110,15 @@ export default function POSDashboardPage() {
     // filter displaySales by date range and partyQuery (by customerName or id)
     const from = new Date(fromDate + 'T00:00:00');
     const to = new Date(toDate + 'T23:59:59');
-    const results = (sales && sales.length ? sales : fallbackSales).filter(s0 => {
+    const results = sales.filter(s0 => {
       const s: any = s0;
-      const dateStr = parseDateOnly(s.date || s.created_at || s.createdAt || '');
+      const dateStr = parseDateOnly(saleDate(s));
       const dt = new Date(dateStr + 'T00:00:00');
       if (isNaN(dt.getTime())) return false;
       if (dt < from || dt > to) return false;
       if (!partyQuery) return true;
       const q = partyQuery.toLowerCase();
-      return (String(s.customerName || '').toLowerCase().includes(q) || String(s.customerPhone || '').includes(q) || String(s.id || '').toLowerCase().includes(q));
+      return (saleCustomerName(s).toLowerCase().includes(q) || String(s.customerPhone || '').includes(q) || saleInvoice(s).toLowerCase().includes(q));
     });
     setStatementResults(results);
   }
@@ -132,10 +127,10 @@ export default function POSDashboardPage() {
     if (!statementResults || !statementResults.length) return;
     const headers = ['Invoice','Date (AD)','Date (BS)','Customer','Total','Status'];
     const rows = statementResults.map(s => {
-      const dateAD = parseDateOnly(s.date || s.created_at || s.createdAt || '');
-      const dateBS = saleNepaliMap[String(s.id || s._id || JSON.stringify(s))] || '';
+      const dateAD = parseDateOnly(saleDate(s));
+      const dateBS = saleNepaliMap[String(saleInvoice(s) || s._id || JSON.stringify(s))] || '';
       const status = (s.amountDue && Number(s.amountDue) > 0) ? 'Partial' : 'Paid';
-      return [s.id, dateAD, dateBS, s.customerName || 'Walk-in', s.total, status];
+      return [saleInvoice(s), dateAD, dateBS, saleCustomerName(s), s.total, status];
     });
     const csv = [headers, ...rows].map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -155,10 +150,10 @@ export default function POSDashboardPage() {
       `<h2>Party Statement (${fromDate} to ${toDate})</h2>` +
       `<table><thead><tr><th>Invoice</th><th>Date (AD)</th><th>Date (BS)</th><th>Customer</th><th>Total</th><th>Status</th></tr></thead><tbody>` +
       statementResults.map(s => {
-        const dateAD = parseDateOnly(s.date || s.created_at || s.createdAt || '');
-        const dateBS = saleNepaliMap[String(s.id || s._id || JSON.stringify(s))] || '';
+        const dateAD = parseDateOnly(saleDate(s));
+        const dateBS = saleNepaliMap[String(saleInvoice(s) || s._id || JSON.stringify(s))] || '';
         const status = (s.amountDue && Number(s.amountDue) > 0) ? 'Partial' : 'Paid';
-        return `<tr><td>${s.id}</td><td>${dateAD}</td><td>${dateBS}</td><td>${s.customerName || 'Walk-in'}</td><td>NRS ${Number(s.total).toLocaleString()}</td><td>${status}</td></tr>`;
+        return `<tr><td>${saleInvoice(s)}</td><td>${dateAD}</td><td>${dateBS}</td><td>${saleCustomerName(s)}</td><td>NRS ${Number(s.total).toLocaleString()}</td><td>${status}</td></tr>`;
       }).join('') +
       `</tbody></table></body></html>`;
     w.document.write(html);
@@ -169,6 +164,22 @@ export default function POSDashboardPage() {
 
   return (
     <div className="pos-dashboard-container">
+      <RoleDashboard
+        role={role}
+        cashierName={getPOSSession().cashier || ''}
+        t={t}
+        stats={{
+          totalSales,
+          totalPurchases,
+          totalProfit,
+          totalDue,
+          lowStockCount: lowStock.length,
+          outOfStockCount: outOfStock.length,
+          expiringSoonCount: expiringSoon.length,
+          recentTransactionCount: displaySales.length,
+        }}
+      />
+
       {/* ── Main KPI Metrics ── */}
       <div className="pos-metrics-grid">
         <div className="pos-metric-card">
@@ -235,18 +246,24 @@ export default function POSDashboardPage() {
             <h3><i className="ri-medal-line" /> {t('उत्कृष्ट बिक्री हुने सामान', 'Top Selling Products')}</h3>
           </div>
           <div className="top-products-list">
-            {displayTop.map((p, i) => (
-              <div key={p.id} className="top-product-item">
-                <div className="left">
-                  <span className="rank">{i + 1}</span>
-                  <div className="emoji">{p.emoji}</div>
-                </div>
-                <div className="info">
-                  <strong className="product-name">{t(p.nameNe || p.nameEn, p.nameEn || p.nameNe)}</strong>
-                  <div className="meta muted">{p.category} • <span className="stock">{p.stock} left</span></div>
-                </div>
+            {displayTop.length === 0 ? (
+              <div className="pos-empty-state" style={{ padding: '18px 12px', color: 'var(--pos-text-muted)' }}>
+                {t('डेटाबाट कुनै उत्पादन भेटिएन।', 'No products found in the database.')}
               </div>
-            ))}
+            ) : (
+              displayTop.map((p, i) => (
+                <div key={p.id} className="top-product-item">
+                  <div className="left">
+                    <span className="rank">{i + 1}</span>
+                    <div className="emoji">{p.emoji}</div>
+                  </div>
+                  <div className="info">
+                    <strong className="product-name">{t(p.nameNe || p.nameEn, p.nameEn || p.nameNe)}</strong>
+                    <div className="meta muted">{p.category} • <span className="stock">{p.stock} left</span></div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -295,15 +312,23 @@ export default function POSDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {displaySales.map(s => (
-                  <tr key={s.id}>
-                    <td>{s.id}</td>
-                    <td>{s.customerName || 'Walk-in'}</td>
-                    <td>{s.date}</td>
-                    <td>NRS {Number(s.total).toLocaleString()}</td>
-                    <td><span className={`pos-badge ${s.amountDue > 0 ? 'yellow' : 'green'}`}>{s.amountDue > 0 ? 'Partial' : 'Paid'}</span></td>
+                {displaySales.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: 28, color: 'var(--pos-text-muted)' }}>
+                      {t('डेटाबाट कुनै बिक्री भेटिएन।', 'No sales found in the database.')}
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  displaySales.map(s => (
+                    <tr key={s.id}>
+                      <td>{saleInvoice(s)}</td>
+                      <td>{saleCustomerName(s)}</td>
+                      <td>{saleDate(s)}</td>
+                      <td>NRS {Number(s.total).toLocaleString()}</td>
+                      <td><span className={`pos-badge ${s.amountDue > 0 ? 'yellow' : 'green'}`}>{s.amountDue > 0 ? 'Partial' : 'Paid'}</span></td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

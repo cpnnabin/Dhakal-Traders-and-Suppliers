@@ -4,7 +4,7 @@ import { usePOS } from './POSContext';
 import { FarmerPurchase } from './posTypes';
 
 export default function PurchasePage() {
-  const { products, setProducts, purchases, setPurchases, apiCall, t } = usePOS();
+  const { products, setProducts, purchases, setPurchases, apiCall, t, cashier } = usePOS();
 
   const [farmerName, setFarmerName] = React.useState('');
   const [prodId,     setProdId]     = React.useState(products[0]?.id || '');
@@ -16,6 +16,7 @@ export default function PurchasePage() {
     { id: 'Cash', label: t('नगद', 'Cash') },
     { id: 'Bank', label: t('बैंक', 'Bank') },
     { id: 'Card', label: t('कार्ड', 'Card') },
+    { id: 'QR', label: t('क्यूआर', 'QR') },
     { id: 'Credit', label: t('उधारो', 'Credit') },
   ];
 
@@ -29,11 +30,25 @@ export default function PurchasePage() {
 
     const log: FarmerPurchase = {
       id: `P-${101 + purchases.length}`,
+      bill_no: `P-${101 + purchases.length}`,
       farmerName: farmerName.trim(),
       productName: t(prod.nameNe, prod.nameEn),
       qtyKg: qty, rate, total: qty * rate,
       date: new Date().toISOString().split('T')[0],
       paymentMode,
+      supplierId: undefined,
+      login_id: cashier && typeof cashier === 'object' && cashier.id ? Number(cashier.id) : undefined,
+      warehouse_id: 1,
+      purchase_date: new Date().toISOString().split('T')[0],
+      gross_amount: qty * rate,
+      discount_amount: 0,
+      taxable_amount: qty * rate,
+      vat_amount: 0,
+      net_amount: qty * rate,
+      paid_amount: qty * rate,
+      due_amount: 0,
+      note: undefined,
+      items: [{ productId: prod.id, productName: t(prod.nameNe, prod.nameEn), qtyKg: qty, rate, total: qty * rate }],
     };
 
     const updatedProduct = { ...prod, stock: prod.stock + qty, purchasePrice: rate };

@@ -1,3 +1,5 @@
+import bcrypt from 'bcryptjs';
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -29,43 +31,45 @@ export async function onRequestPost({ request, env }) {
   const email = String(body.email || '').trim();
   const password = String(body.password || phone || '').trim();
   if (!name || !phone || !password) return json({ success: false, error: 'Name, phone and password are required.' }, 400);
-  const loginId = String(email || phone).trim();
+  const loginId = String(email || phone || name).trim();
+  const username = String(body.username || loginId).trim();
 
   try {
     const existing = await env.DB.prepare(
-      'SELECT id FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR phone = ?3)'
-    ).bind('customer', loginId, phone).first();
+      'SELECT id FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR LOWER(username) = LOWER(?3) OR phone = ?4)'
+    ).bind('customer', loginId, username, phone).first();
     if (existing) return json({ success: false, error: 'Account already exists.' }, 409);
 
-    const passwordHash = await sha256Hex(password + loginId.toLowerCase());
+    const passwordHash = bcrypt.hashSync(password, 10);
     await env.DB.prepare(
-      'INSERT INTO login (email, display_name, role, phone, password_hash) VALUES (?1, ?2, ?3, ?4, ?5)'
-    ).bind(loginId.toLowerCase(), name, 'customer', phone, passwordHash).run();
+      'INSERT INTO login (full_name, username, email, role, phone, password_hash, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)'
+    ).bind(name, username, email || loginId.toLowerCase(), 'customer', phone, passwordHash, 'active').run();
 
     const loginRow = await env.DB.prepare(
-      'SELECT id, email, display_name, phone FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR phone = ?3) ORDER BY id DESC'
-    ).bind('customer', loginId, phone).first();
+      'SELECT id, email, username, full_name, phone FROM login WHERE role = ?1 AND (LOWER(email) = LOWER(?2) OR LOWER(username) = LOWER(?3) OR phone = ?4) ORDER BY id DESC'
+    ).bind('customer', loginId, username, phone).first();
 
     const customerInsert = await env.DB.prepare(
-      'INSERT INTO customers (login_id, name, phone, email) VALUES (?1, ?2, ?3, ?4)'
+      'INSERT INTO customers (login_id, full_name, phone, email) VALUES (?1, ?2, ?3, ?4)'
     ).bind(loginRow.id, name, phone, email || null).run();
 
     const created = await env.DB.prepare(
-      'SELECT id, login_id, name, phone, email FROM customers WHERE login_id = ?1'
+      'SELECT id, login_id, full_name, phone, email FROM customers WHERE login_id = ?1'
     ).bind(loginRow.id).first();
 
     return json({
       success: true,
       customerId: String(created?.id || customerInsert.meta?.last_row_id || ''),
-      name: created?.name || name,
-      login_id: loginRow.email || loginRow.phone || loginId,
+      name: created?.full_name || name,
+      login_id: String(loginRow.id),
       customer: {
         id: String(created?.id || customerInsert.meta?.last_row_id || ''),
         _id: String(created?.id || customerInsert.meta?.last_row_id || ''),
-        login_id: loginRow.email || loginRow.phone || loginId,
-        name: created?.name || name,
+        login_id: String(loginRow.id),
+        name: created?.full_name || name,
+        full_name: created?.full_name || name,
         phone: created?.phone || phone,
-        email: created?.email || email || '',
+        email: created?.email || email || loginId || '',
       },
     });
   } catch (err) {

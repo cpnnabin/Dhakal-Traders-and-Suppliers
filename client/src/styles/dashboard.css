@@ -2175,7 +2175,8 @@ body.pos-nav-open {
   flex: 1;
   min-height: 0;
   padding: 0 0 12px !important;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .pos-page-content:has(.pos-bill) {
@@ -3417,7 +3418,8 @@ body.pos-nav-open {
   }
 
   .pos-workspace--billing .pos-page-content {
-    overflow: visible;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .pos-bill {

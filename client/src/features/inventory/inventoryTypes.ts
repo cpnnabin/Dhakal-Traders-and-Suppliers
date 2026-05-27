@@ -10,6 +10,7 @@ export interface Product {
   stock?: number;
   minStock?: number;
   createdAt?: string;
+  imageUrl?: string;
 }
 
 export interface Category {

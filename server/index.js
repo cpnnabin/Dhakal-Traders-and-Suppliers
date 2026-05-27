@@ -11,6 +11,9 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import knex from './db/knex.js';
+import minioClient from './utils/minioClient.js';
+import uploadRoutes from './uploadRoutes.js';
+import reprocessRoutes from './reprocessRoutes.js';
 
 dotenv.config();
 
@@ -131,9 +134,10 @@ if (process.env.ENABLE_EXPIRY_CRON === '1') {
     const loginCount = loginCountRow ? Number(loginCountRow.count) : 0;
     if (loginCount === 0) {
       await knex('login').insert([
-        { email: 'admin@dhakaltraders.com', display_name: 'Cashier Admin', role: 'owner', phone: '9857823400', password_hash: SHARED_LOGIN_PASSWORD_HASH },
+        { email: 'admin@dhakaltraders.com', display_name: 'Cashier Admin', role: 'admin', phone: '9857823400', password_hash: SHARED_LOGIN_PASSWORD_HASH },
         { email: 'owner@dhakaltraders.com', display_name: 'Dipak Sharma', role: 'owner', phone: '9857823400', password_hash: SHARED_LOGIN_PASSWORD_HASH },
         { email: 'cashier@dhakaltraders.com', display_name: 'Ram Bahadur', role: 'cashier', phone: '9847000000', password_hash: SHARED_LOGIN_PASSWORD_HASH },
+        { email: 'nabin@dhakaltraders.com', display_name: 'Nabin Dhakal', role: 'cashier', phone: '9869596970', password_hash: SHARED_LOGIN_PASSWORD_HASH },
         { email: 'shyam@example.com', display_name: 'Shyam Kumar Store', role: 'customer', phone: '9812345678', password_hash: customerPasswordHash('pass123', 'shyam@example.com'), address: 'Biratnagar', bio: 'Retail Customer', avatar: '🛍️' },
         { email: 'hari@gmail.com', display_name: 'Hari Prasad', role: 'customer', phone: '9841000111', password_hash: customerPasswordHash('hari123', 'hari@gmail.com'), address: 'Kathmandu', bio: 'Retail Customer', avatar: '🛍️' }
       ]).catch(() => {});
@@ -156,12 +160,28 @@ if (process.env.ENABLE_EXPIRY_CRON === '1') {
     const hasCustomerLoginId = await knex.schema.hasColumn('sales', 'customerLoginId').catch(() => false);
     if (!hasCustomerLoginId) await knex.schema.table('sales', (t) => t.string('customerLoginId')).catch(() => {});
 
+    const hasProductImageUrl = await knex.schema.hasColumn('products', 'imageUrl').catch(() => false);
+    if (!hasProductImageUrl) await knex.schema.table('products', (t) => t.string('imageUrl')).catch(() => {});
+
     // Login table extra columns
+    // Ensure display_name exists (some older DBs used `name`)
+    const hasDisplayName = await knex.schema.hasColumn('login', 'display_name').catch(() => false);
+    if (!hasDisplayName) {
+      await knex.schema.table('login', (t) => t.string('display_name')).catch(() => {});
+      const hasNameCol = await knex.schema.hasColumn('login', 'name').catch(() => false);
+      if (hasNameCol) {
+        // copy existing `name` values into `display_name`
+        await knex.raw("UPDATE login SET display_name = name WHERE display_name IS NULL").catch(() => {});
+      }
+    }
+
     const loginExtraCols = ['address','alternative_phone','bio','avatar','pan_no','profile_photo'];
     for (const col of loginExtraCols) {
       const has = await knex.schema.hasColumn('login', col).catch(() => false);
       if (!has) await knex.schema.table('login', (t) => t.string(col)).catch(() => {});
     }
+
+    await ensureLoginIndexes();
   } catch (e) {
     console.error('Seed/migration helpers error', e);
   }
@@ -188,6 +208,11 @@ const sha256Hex = (text) => {
 };
 
 const normalizeLoginEmail = (email) => String(email || '').trim().toLowerCase().replace(/@dhakaltraders\.com\.np$/i, '@dhakaltraders.com');
+const ALLOWED_LOGIN_ROLES = new Set(['admin', 'owner', 'cashier', 'supplier', 'customer']);
+const STAFF_LOGIN_ROLES = new Set(['admin', 'owner', 'cashier']);
+const normalizeLoginRole = (role) => String(role || '').trim().toLowerCase();
+const isAllowedLoginRole = (role) => ALLOWED_LOGIN_ROLES.has(normalizeLoginRole(role));
+const isStaffLoginRole = (role) => STAFF_LOGIN_ROLES.has(normalizeLoginRole(role));
 
 const SHARED_LOGIN_PASSWORD = process.env.SHARED_LOGIN_PASSWORD || 'Tribe@123';
 const SHARED_LOGIN_PASSWORD_HASH = sha256Hex(SHARED_LOGIN_PASSWORD);
@@ -221,6 +246,24 @@ const verifyUserPassword = (email, inputPassword, dbHash) => {
   const emailSalted = sha256Hex(password + email);
   return emailSalted === dbHash;
 };
+
+async function ensureLoginIndexes() {
+  try {
+    await knex.raw('CREATE UNIQUE INDEX IF NOT EXISTS idx_login_email_lower ON login(LOWER(email))');
+  } catch (e) {
+    console.warn('Unable to ensure login email index', e.message);
+  }
+  try {
+    await knex.raw('CREATE INDEX IF NOT EXISTS idx_login_role ON login(role)');
+  } catch (e) {
+    console.warn('Unable to ensure login role index', e.message);
+  }
+  try {
+    await knex.raw('CREATE UNIQUE INDEX IF NOT EXISTS idx_login_email_lower ON login(LOWER(email))');
+  } catch (e) {
+    console.warn('Unable to ensure login email index', e.message);
+  }
+}
 
 // Simple POS token requirement middleware for admin/cashier actions
 function requirePosAuth(req, res, next) {
@@ -259,7 +302,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: process.env.FRONTEND_URL
       ? process.env.FRONTEND_URL.split(',')
-      : ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173', 'http://[::1]:5173'],
+      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4173', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://[::1]:5173', 'http://[::1]:5174'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true
   }
@@ -338,11 +381,44 @@ io.on('connection', (socket) => {
 app.use(cors({
   origin: process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',')
-    : ['http://localhost:5173', 'http://localhost:4173', 'http://127.0.0.1:5173', 'http://[::1]:5173'],
+    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4173', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://[::1]:5173', 'http://[::1]:5174'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));
-app.use(express.json());
+// Simple request/response logger to help diagnose 500s in dev
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    console.log(`[HTTP] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
+  });
+  next();
+});
+// Allow larger JSON/urlencoded bodies for client requests (profile updates may include larger payloads)
+app.use(express.json({ limit: process.env.EXPRESS_JSON_LIMIT || '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.EXPRESS_URLENCODED_LIMIT || '5mb' }));
+
+// Lightweight in-memory schema cache to avoid repeated hasColumn checks
+const schemaCache = {
+  notifications: null // will be set to { hasRole: bool, hasRead: bool }
+};
+
+// Initialize notifications schema cache asynchronously (best-effort)
+(async function initSchemaCache() {
+  try {
+    const hasNotifications = await knex.schema.hasTable('notifications').catch(() => false);
+    if (!hasNotifications) {
+      schemaCache.notifications = { hasRole: false, hasRead: false };
+      return;
+    }
+    const hasRole = await knex.schema.hasColumn('notifications', 'role').catch(() => false);
+    const hasRead = await knex.schema.hasColumn('notifications', 'read').catch(() => false);
+    schemaCache.notifications = { hasRole, hasRead };
+    console.log('[schemaCache] notifications', schemaCache.notifications);
+  } catch (e) {
+    console.warn('initSchemaCache error', e.message || e);
+  }
+})();
 
 // Trust proxy so req.secure and x-forwarded-* headers are respected when behind a reverse proxy
 app.set('trust proxy', 1);
@@ -366,12 +442,48 @@ if (process.env.NODE_ENV === 'production') {
 // --- Health check ---
 app.get('/api/health', async (_req, res) => {
   try {
+    const hasContacts = await knex.schema.hasTable('contacts').catch(() => false);
+    if (!hasContacts) {
+      return res.json({ status: 'ok', contacts: 0, time: new Date().toISOString() });
+    }
+
     const row = await knex('contacts').count('* as count').first();
     res.json({ status: 'ok', contacts: row ? row.count : 0, time: new Date().toISOString() });
   } catch (err) {
-    res.json({ status: 'ok', contacts: 0, time: new Date().toISOString(), error: err.message });
+    res.json({ status: 'ok', contacts: 0, time: new Date().toISOString() });
   }
 });
+
+// --- QR image from MinIO (for receipts / billing preview) ---
+app.get('/api/qr-image', async (req, res) => {
+  try {
+    const bucket = String(req.query.bucket || process.env.MINIO_QR_BUCKET || 'images');
+    const objectName = String(req.query.object || process.env.MINIO_QR_OBJECT || 'downloaded-image.png');
+
+    const presignedUrl = await minioClient.presignedGetObject(bucket, objectName, 60 * 60);
+    return res.redirect(presignedUrl);
+  } catch (err) {
+    console.warn('MinIO QR image unavailable — returning tiny placeholder image. Error:', err?.message || err);
+    // Return a 1x1 transparent PNG as a safe placeholder so image tags won't trigger additional 500s
+    const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+    const buf = Buffer.from(pngBase64, 'base64');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Length', buf.length);
+    return res.end(buf);
+  }
+});
+
+// Global error handler to log unexpected errors and return JSON
+app.use((err, req, res, next) => {
+  try {
+    console.error('Unhandled server error:', err && err.stack ? err.stack : err);
+  } catch (e) {}
+  if (res.headersSent) return next(err);
+  res.status(500).json({ success: false, error: 'Internal server error' });
+});
+
+app.use('/api', uploadRoutes);
+app.use('/api', reprocessRoutes);
 
 // --- Notifications table ---
 sqliteDb.run(`
@@ -434,10 +546,41 @@ app.get('/api/notifications/unread-count', async (req, res) => {
   try {
     const role = req.query.role ? String(req.query.role) : null;
     let row;
-    if (role) row = await knex('notifications').where({ role }).andWhere('read', 0).count({ count: '*' }).first();
-    else row = await knex('notifications').where('read', 0).count({ count: '*' }).first();
+    const cached = schemaCache.notifications;
+    const hasRoleCol = cached ? cached.hasRole : await knex.schema.hasColumn('notifications', 'role').catch(() => false);
+    const hasReadCol = cached ? cached.hasRead : await knex.schema.hasColumn('notifications', 'read').catch(() => false);
+    const readCol = hasReadCol ? 'read' : null;
+    if (role && hasRoleCol && readCol) {
+      row = await knex('notifications').where({ role }).andWhere(readCol, 0).count({ count: '*' }).first();
+    } else if (readCol) {
+      row = await knex('notifications').where(readCol, 0).count({ count: '*' }).first();
+    } else {
+      // Table exists but missing expected columns — return zero rather than error
+      row = { count: 0 };
+    }
     res.json({ success: true, count: row ? Number(row.count) : 0 });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Client-side diagnostic ingestion endpoint
+app.post('/api/diagnostics/client-failure', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const { url, resourceType, page } = payload;
+    console.log('[client-diagnostic]', { url, resourceType, page, ua: req.headers['user-agent'] });
+    // Try to persist to client_logs if table exists
+    const hasClientLogs = await knex.schema.hasTable('client_logs').catch(() => false);
+    if (hasClientLogs) {
+      try {
+        await knex('client_logs').insert({ url: url ? String(url).slice(0, 2000) : null, resource_type: resourceType ? String(resourceType).slice(0,200) : null, page: page ? String(page).slice(0,500) : null, user_agent: req.headers['user-agent'] ? String(req.headers['user-agent']).slice(0,2000) : null, payload: JSON.stringify(payload) });
+      } catch (e) {
+        console.warn('client_logs insert failed', e.message || e);
+      }
+    }
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // --- Date conversion proxy to Bolpatra (with local fallback) ---
@@ -549,8 +692,57 @@ app.get('/api/contacts', async (req, res) => {
 // Products
 app.get('/api/pos/products', async (req, res) => {
   try {
-    const products = await knex('products').select('*');
-    res.json({ success: true, products });
+    const products = await knex('products as p')
+      .leftJoin('categories as c', 'p.category_id', 'c.id')
+      .leftJoin('units as u', 'p.unit_id', 'u.id')
+      .leftJoin(
+        knex('product_stock')
+          .select('product_id')
+          .sum({ stock: 'quantity' })
+          .groupBy('product_id')
+          .as('ps'),
+        'p.id',
+        'ps.product_id'
+      )
+      .select(
+        'p.id',
+        'p.barcode',
+        'p.name_en as nameEn',
+        'p.name_ne as nameNe',
+        'p.purchase_price as purchasePrice',
+        'p.selling_price as sellingPrice',
+        'p.min_stock as minStock',
+        'p.image',
+        'p.imageUrl',
+        'p.expiry_date as expiryDate',
+        'p.status',
+        'p.login_id as loginId',
+        'c.category_name as category',
+        'u.unit_name as unitName',
+        'u.short_name as unitShort',
+        knex.raw('COALESCE(ps.stock, 0) as stock')
+      )
+      .orderBy('p.created_at', 'desc');
+
+    const mapped = products.map((p) => ({
+      id: p.id,
+      barcode: p.barcode || '',
+      nameEn: p.nameEn,
+      nameNe: p.nameNe || '',
+      category: p.category || '',
+      stock: Number(p.stock || 0),
+      unit: p.unitShort || p.unitName || '',
+      purchasePrice: Number(p.purchasePrice || 0),
+      sellingPrice: Number(p.sellingPrice || 0),
+      emoji: '📦',
+      status: p.status || 'active',
+      expiryDate: p.expiryDate || '',
+      minStock: Number(p.minStock || 0),
+      image: p.image || '',
+      imageUrl: p.imageUrl || '',
+      loginId: p.loginId ? String(p.loginId) : '',
+    }));
+    res.json({ success: true, products: mapped });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -558,29 +750,71 @@ app.get('/api/pos/products', async (req, res) => {
 
 app.post('/api/pos/products', async (req, res) => {
   try {
-    const { id, nameEn, nameNe, category, stock, unit, purchasePrice, sellingPrice, emoji, status } = req.body;
-    sqliteDb.run(
-      `CREATE TABLE IF NOT EXISTS orders (
-        id TEXT PRIMARY KEY,
-        customerId INTEGER NOT NULL,
-        items TEXT NOT NULL,
-        total REAL NOT NULL,
-        status TEXT DEFAULT 'pending',
-        date TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(customerId) REFERENCES customers(id)
-      )`
-    );
+    const { id, nameEn, nameNe, category, stock, unit, purchasePrice, sellingPrice, emoji, status, imageUrl } = req.body || {};
+    if (!id || !nameEn) {
+      return res.status(400).json({ success: false, error: 'Product id and name are required.' });
+    }
 
-    // Backfill missing customer detail columns for older databases
-    ['customerName', 'customerPhone', 'customerEmail'].forEach((col) => {
-      try {
-        sqliteDb.run('ALTER TABLE orders ADD COLUMN ' + col + ' TEXT');
-      } catch (err) {
-        // ignore if the column already exists
+    const categoryRow = category ? await knex('categories').whereRaw('LOWER(category_name) = ?', [String(category).trim().toLowerCase()]).first() : null;
+    const unitRow = unit ? await knex('units').whereRaw('LOWER(short_name) = ? OR LOWER(unit_name) = ?', [String(unit).trim().toLowerCase(), String(unit).trim().toLowerCase()]).first() : null;
+
+    await knex('products').insert({
+      id: String(id).trim(),
+      barcode: null,
+      name_en: String(nameEn).trim(),
+      name_ne: nameNe ? String(nameNe).trim() : null,
+      category_id: categoryRow ? categoryRow.id : null,
+      brand_id: null,
+      unit_id: unitRow ? unitRow.id : null,
+      purchase_price: Number(purchasePrice || 0),
+      selling_price: Number(sellingPrice || 0),
+      tax_percent: 13,
+      min_stock: 0,
+      image: emoji || null,
+      imageUrl: imageUrl ? String(imageUrl) : null,
+      expiry_date: null,
+      status: status || 'active',
+      login_id: null,
+    }).onConflict('id').merge();
+
+    if (stock !== undefined) {
+      const qty = Number(stock || 0);
+      const existingStock = await knex('product_stock').where({ product_id: String(id).trim(), warehouse_id: 1 }).first();
+      if (existingStock) {
+        await knex('product_stock').where({ id: existingStock.id }).update({ quantity: qty });
+      } else {
+        await knex('product_stock').insert({ warehouse_id: 1, product_id: String(id).trim(), quantity: qty });
+      }
+    }
+
+    const created = await knex('products as p')
+      .leftJoin('categories as c', 'p.category_id', 'c.id')
+      .leftJoin('units as u', 'p.unit_id', 'u.id')
+      .leftJoin(
+        knex('product_stock').select('product_id').sum({ stock: 'quantity' }).groupBy('product_id').as('ps'),
+        'p.id',
+        'ps.product_id'
+      )
+      .select('p.*', 'c.category_name as category', 'u.short_name as unitShort', knex.raw('COALESCE(ps.stock, 0) as stock'))
+      .where('p.id', String(id).trim())
+      .first();
+
+    res.json({
+      success: true,
+      product: {
+        id: created.id,
+        nameEn: created.name_en,
+        nameNe: created.name_ne || '',
+        category: created.category || '',
+        stock: Number(created.stock || 0),
+        unit: created.unitShort || '',
+        purchasePrice: Number(created.purchase_price || 0),
+        sellingPrice: Number(created.selling_price || 0),
+        emoji: created.image || '📦',
+        imageUrl: created.imageUrl || '',
+        status: created.status || 'active',
       }
     });
-    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -600,55 +834,164 @@ app.get('/api/pos/sales', async (req, res) => {
 app.post('/api/pos/sales', async (req, res) => {
   try {
     const {
-      id, items, subtotal, discount, tax, total, date, cashier, customerId, paymentMode,
-      customerName, customerPhone, customerEmail, customerLoginId, customerAddress, customerPan,
-      customerAlternativeAddress, customerAlternativePhone
-    } = req.body;
-    const itemsStr = typeof items === 'string' ? items : JSON.stringify(items);
-    
-    await knex('sales').insert({
-      id: id.trim(), items: itemsStr, subtotal: Number(subtotal), discount: Number(discount || 0), tax: Number(tax || 0), total: Number(total), date: date.trim(), cashier: cashier.trim(), customerId: customerId ? String(customerId).trim() : null, paymentMode: paymentMode || 'Cash', customerName: customerName ? String(customerName).trim() : null, customerPhone: customerPhone ? String(customerPhone).trim() : null, customerEmail: customerEmail ? String(customerEmail).trim() : null, customerLoginId: customerLoginId ? String(customerLoginId).trim() : null, customerAddress: customerAddress ? String(customerAddress).trim() : null, customerPan: customerPan ? String(customerPan).trim() : null, customerAlternativeAddress: customerAlternativeAddress ? String(customerAlternativeAddress).trim() : null, customerAlternativePhone: customerAlternativePhone ? String(customerAlternativePhone).trim() : null
-    });
-    const sale = await knex('sales').where('id', id.trim()).first();
-    sale.items = JSON.parse(sale.items);
-    // Emit realtime sale notification
-    try { io.emit('sale:new', sale); } catch (e) {}
-    // persist notification
-    try { await createNotification({ type: 'sale', title: `Sale ${sale.id}`, body: `Total ${sale.total}`, data: sale, role: 'admin' }); } catch (e) {}
-    // Update product stock for each sold item and emit low-stock alerts
-    try {
-      const soldItems = Array.isArray(sale.items) ? sale.items : [];
-      for (const it of soldItems) {
-        const productId = (it.productId || it.id || it._id || it.product_id || it.product) && String(it.productId || it.id || it._id || it.product_id || it.product);
-        const qty = Number(it.qty || it.quantity || it.qty_sold || it.q || 0);
-        if (!productId || !qty) continue;
-        // decrement stock
-        await knex('products').where('id', productId).decrement('stock', qty);
-        const p = await knex('products').select('id', 'nameEn', 'stock', 'minStock').where('id', productId).first();
-        if (p && typeof p.stock === 'number') {
-          const minS = Number(p.minStock || 0);
-          if (minS > 0 && Number(p.stock) < minS) {
-            try { io.to('role:admin').emit('stock:low', { productId: p.id, name: p.nameEn, stock: p.stock, minStock: minS }); } catch (e) {}
-            try { await createNotification({ type: 'stock', title: `Low stock: ${p.nameEn}`, body: `Stock ${p.stock} < ${minS}`, data: { productId: p.id, stock: p.stock, minStock: minS }, role: 'admin' }); } catch (e) {}
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error updating product stock after sale', e);
+      id,
+      items = [],
+      subtotal,
+      discount,
+      tax,
+      total,
+      amountPaid,
+      amountDue,
+      date,
+      cashier,
+      customerId,
+      paymentMode,
+      customerName,
+      customerPhone,
+      customerEmail,
+      customerLoginId,
+      customerAddress,
+      customerPan,
+      customerAlternativeAddress,
+      customerAlternativePhone,
+      note,
+      warehouseId,
+    } = req.body || {};
+
+    if (!id || !date || !cashier) {
+      return res.status(400).json({ success: false, error: 'Sale id, date and cashier are required.' });
     }
-    res.json({ success: true, sale });
-      // Record ledger transaction
-      const txnDate = date.trim();
-      // Determine sign: if the payment is to a customer (e.g., refund), make amount negative
-      const isCustomerTransaction = paymentMode && paymentMode.toLowerCase().includes('customer');
-      const signedAmount = Number(total) * (isCustomerTransaction ? -1 : 1);
-      if (paymentMode === 'Cash') {
-        // Cash received: debit cash, credit sales (use signed amount)
-        await knex('transactions').insert({ date: txnDate, entity_id: id.trim(), entity_type: 'sale', type: 'Sale', ref_no: id.trim(), debit: 0, credit: signedAmount, narration: `Cash sale ${id}` });
+
+    const saleItems = Array.isArray(items) ? items : [];
+    const billDate = String(date).slice(0, 10) || new Date().toISOString().slice(0, 10);
+    const customerNameValue = String(customerName || '').trim();
+    const cashierLookup = await knex('login')
+      .whereRaw('LOWER(email) = ? OR LOWER(username) = ? OR LOWER(full_name) = ?', [String(cashier).trim().toLowerCase(), String(cashier).trim().toLowerCase(), String(cashier).trim().toLowerCase()])
+      .first();
+
+    let resolvedCustomerId = customerId ? parseInt(customerId, 10) : null;
+    if (!resolvedCustomerId && customerNameValue) {
+      const existingCustomer = await knex('customers').whereRaw('LOWER(full_name) = ?', [customerNameValue.toLowerCase()]).first();
+      if (existingCustomer) {
+        resolvedCustomerId = existingCustomer.id;
       } else {
-        // Non‑cash payment (e.g., eSewa, Khalti, or customer refund)
-        await knex('transactions').insert({ date: txnDate, entity_id: id.trim(), entity_type: 'sale', type: 'Sale', ref_no: id.trim(), debit: signedAmount, credit: 0, narration: `${paymentMode} sale ${id}` });
+        const insertedCustomer = await knex('customers').insert({
+          full_name: customerNameValue,
+          phone: customerPhone ? String(customerPhone).trim() : null,
+          email: customerEmail ? String(customerEmail).trim() : null,
+          address: customerAddress ? String(customerAddress).trim() : null,
+          pan_no: customerPan ? String(customerPan).trim() : null,
+          login_id: customerLoginId ? Number.isNaN(Number(customerLoginId)) ? null : Number(customerLoginId) : null,
+          loyalty_points: 0,
+          opening_balance: 0,
+        });
+        resolvedCustomerId = Array.isArray(insertedCustomer) ? insertedCustomer[0] : insertedCustomer;
       }
+    }
+
+    const saleAmount = Number(total || 0);
+    const saleSubtotal = Number(subtotal || saleAmount);
+    const saleDiscount = Number(discount || 0);
+    const saleTax = Number(tax || 0);
+    const salePaid = Number(amountPaid ?? saleAmount);
+    const saleDue = Number(amountDue ?? Math.max(0, saleAmount - salePaid));
+    const saleQty = saleItems.reduce((sum, it) => sum + Number(it.qty || it.quantity || 0), 0);
+
+    const saleInsert = {
+      invoice_no: String(id).trim(),
+      customer_id: resolvedCustomerId,
+      login_id: cashierLookup ? cashierLookup.id : null,
+      warehouse_id: warehouseId ? Number(warehouseId) : 1,
+      bill_date: billDate,
+      miti: null,
+      payment_mode: paymentMode || 'Cash',
+      gross_amount: saleSubtotal + saleDiscount,
+      discount_amount: saleDiscount,
+      taxable_amount: saleSubtotal,
+      vat_amount: saleTax,
+      net_amount: saleAmount,
+      paid_amount: salePaid,
+      due_amount: saleDue,
+      tender_amount: salePaid,
+      change_amount: Math.max(0, salePaid - saleAmount),
+      total_qty: saleQty,
+      loyalty_point_earned: 0,
+      loyalty_total_points: 0,
+      note: note || null,
+    };
+
+    const inserted = await knex('sales').insert(saleInsert);
+    const salePkId = Array.isArray(inserted) ? inserted[0] : inserted;
+
+    for (const it of saleItems) {
+      const productId = String(it.productId || it.id || it._id || it.product_id || it.product || '').trim();
+      if (!productId) continue;
+      const qty = Number(it.qty || it.quantity || 0);
+      const rate = Number(it.rate || 0);
+      const amount = Number(it.total || qty * rate);
+      const product = await knex('products').where('id', productId).first();
+      await knex('sale_items').insert({
+        sale_id: salePkId,
+        product_id: productId,
+        product_name: String(it.name || it.productName || product?.name_en || product?.nameEn || productId),
+        hs_code: it.hs_code || it.hsCode || null,
+        qty,
+        rate,
+        discount: Number(it.discount || 0),
+        vat_percent: Number(it.vat_percent || it.vatPercent || 13),
+        vat_amount: Number(it.vat_amount || it.vatAmount || 0),
+        amount,
+        batch_no: it.batch_no || it.batchNo || null,
+        expiry_date: it.expiry_date || it.expiryDate || null,
+      });
+
+      const stockRow = await knex('product_stock').where('product_id', productId).orderBy('id', 'asc').first();
+      if (stockRow) {
+        await knex('product_stock').where('id', stockRow.id).decrement('quantity', qty);
+      }
+    }
+
+    const saleRow = await knex('sales').where('id', salePkId).first();
+    const saleItemsRows = await knex('sale_items').where('sale_id', salePkId).orderBy('id', 'asc');
+    const customerRow = resolvedCustomerId ? await knex('customers').where('id', resolvedCustomerId).first() : null;
+    const responseSale = {
+      id: saleRow.invoice_no,
+      invoice_no: saleRow.invoice_no,
+      customerId: saleRow.customer_id ? String(saleRow.customer_id) : '',
+      customerName: customerRow?.full_name || customerNameValue || 'Walk-in',
+      customerPhone: customerRow?.phone || customerPhone || '',
+      customerEmail: customerRow?.email || customerEmail || '',
+      customerLoginId: customerRow?.login_id ? String(customerRow.login_id) : (customerLoginId || ''),
+      customerAddress: customerRow?.address || customerAddress || '',
+      customerPan: customerRow?.pan_no || customerPan || '',
+      customerAlternativeAddress: customerAlternativeAddress || '',
+      customerAlternativePhone: customerAlternativePhone || '',
+      items: saleItemsRows.map((si) => ({
+        productId: si.product_id,
+        name: si.product_name,
+        qty: Number(si.qty),
+        unit: '',
+        rate: Number(si.rate),
+        total: Number(si.amount),
+        cost: 0,
+      })),
+      subtotal: Number(saleRow.taxable_amount || saleSubtotal),
+      discount: Number(saleRow.discount_amount || 0),
+      tax: Number(saleRow.vat_amount || 0),
+      total: Number(saleRow.net_amount || saleAmount),
+      amountPaid: Number(saleRow.paid_amount || salePaid),
+      amountDue: Number(saleRow.due_amount || saleDue),
+      date: saleRow.bill_date,
+      cashier: cashierLookup?.full_name || cashier,
+      paymentMode: saleRow.payment_mode || paymentMode || 'Cash',
+      status: 'completed',
+      note: saleRow.note || note || '',
+    };
+
+    try { io.emit('sale:new', responseSale); } catch (e) {}
+    try { await createNotification({ type: 'sale', title: `Sale ${responseSale.id}`, body: `Total ${responseSale.total}`, data: responseSale, role: 'admin' }); } catch (e) {}
+
+    res.json({ success: true, sale: responseSale });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -667,28 +1010,107 @@ app.get('/api/pos/purchases', async (req, res) => {
 
 app.post('/api/pos/purchases', async (req, res) => {
   try {
-    const { id, supplier, items, total, date, paymentMode } = req.body;
-    const itemsStr = typeof items === 'string' ? items : JSON.stringify(items);
-    // record purchase transaction
-    await knex('transactions').insert({ date: date.trim(), entity_id: id.trim(), entity_type: 'purchase', type: 'Purchase', ref_no: id.trim(), debit: 0, credit: total, narration: `Purchase ${id}` });
-    // insert into purchases table
-    await knex('purchases').insert({ id: id.trim(), supplier: supplier ? String(supplier).trim() : null, items: itemsStr, total: Number(total), date: date.trim(), paymentMode: paymentMode || 'Cash' }).onConflict('id').merge();
-    // update product stock (increment)
-    try {
-      const purchasedItems = Array.isArray(items) ? items : JSON.parse(itemsStr || '[]');
-      for (const it of purchasedItems) {
-        const productId = (it.productId || it.id || it._id || it.product_id || it.product) && String(it.productId || it.id || it._id || it.product_id || it.product);
-        const qty = Number(it.qty || it.quantity || it.q || 0);
-        if (!productId || !qty) continue;
-        await knex('products').where('id', productId).increment('stock', qty);
-      }
-    } catch (e) {
-      console.error('Error updating product stock after purchase', e);
+    const { id, supplier, farmerName, productName, qtyKg, rate, total, date, paymentMode, items, note, warehouseId } = req.body || {};
+    if (!id || !date) {
+      return res.status(400).json({ success: false, error: 'Purchase id and date are required.' });
     }
-    const purchase = await knex('purchases').where('id', id.trim()).first();
-    purchase.items = purchase.items ? JSON.parse(purchase.items) : [];
-    try { await createNotification({ type: 'purchase', title: `Purchase ${purchase.id}`, body: `Purchase ${purchase.id} recorded`, data: purchase, role: 'admin' }); } catch (e) {}
-    res.json({ success: true, purchase });
+
+    const purchaseItems = Array.isArray(items) && items.length > 0
+      ? items
+      : [{ productName: productName || 'Item', qtyKg: qtyKg || 0, rate: rate || 0, total: total || 0 }];
+
+    const supplierName = String(supplier || farmerName || '').trim();
+    let supplierRow = null;
+    if (supplierName) {
+      supplierRow = await knex('suppliers').whereRaw('LOWER(supplier_name) = ?', [supplierName.toLowerCase()]).first();
+      if (!supplierRow) {
+        const insertedSupplier = await knex('suppliers').insert({ supplier_name: supplierName, opening_balance: 0, phone: null, email: null, address: null, pan_no: null, login_id: null });
+        const supplierPk = Array.isArray(insertedSupplier) ? insertedSupplier[0] : insertedSupplier;
+        supplierRow = await knex('suppliers').where('id', supplierPk).first();
+      }
+    }
+
+    const purchaseDate = String(date).slice(0, 10) || new Date().toISOString().slice(0, 10);
+    const purchaseTotal = Number(total || 0);
+    const purchaseInsert = {
+      bill_no: String(id).trim(),
+      supplier_id: supplierRow ? supplierRow.id : null,
+      login_id: null,
+      warehouse_id: warehouseId ? Number(warehouseId) : 1,
+      purchase_date: purchaseDate,
+      payment_mode: paymentMode || 'Cash',
+      gross_amount: purchaseTotal,
+      discount_amount: 0,
+      taxable_amount: purchaseTotal,
+      vat_amount: 0,
+      net_amount: purchaseTotal,
+      paid_amount: purchaseTotal,
+      due_amount: 0,
+      note: note || null,
+    };
+
+    const insertedPurchase = await knex('purchases').insert(purchaseInsert);
+    const purchasePkId = Array.isArray(insertedPurchase) ? insertedPurchase[0] : insertedPurchase;
+
+    for (const it of purchaseItems) {
+      const productNameValue = String(it.productName || it.product_name || 'Item').trim();
+      const qty = Number(it.qtyKg || it.qty || it.quantity || 0);
+      const rateValue = Number(it.rate || 0);
+      const amount = Number(it.total || (qty * rateValue));
+      let product = await knex('products').whereRaw('LOWER(name_en) = ?', [productNameValue.toLowerCase()]).first();
+      if (!product) {
+        const productId = `PRD-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
+        await knex('products').insert({ id: productId, barcode: null, name_en: productNameValue, name_ne: null, category_id: null, brand_id: null, unit_id: null, purchase_price: rateValue, selling_price: rateValue, tax_percent: 13, min_stock: 0, image: null, expiry_date: null, status: 'active', login_id: null });
+        product = await knex('products').where('id', productId).first();
+      }
+
+      await knex('purchase_items').insert({
+        purchase_id: purchasePkId,
+        product_id: product.id,
+        product_name: product.name_en,
+        qty,
+        rate: rateValue,
+        discount: Number(it.discount || 0),
+        vat_percent: Number(it.vat_percent || it.vatPercent || 13),
+        vat_amount: Number(it.vat_amount || it.vatAmount || 0),
+        amount,
+        batch_no: it.batch_no || it.batchNo || null,
+        expiry_date: it.expiry_date || it.expiryDate || null,
+      });
+
+      const stockRow = await knex('product_stock').where('product_id', product.id).orderBy('id', 'asc').first();
+      if (stockRow) {
+        await knex('product_stock').where('id', stockRow.id).increment('quantity', qty);
+      } else {
+        await knex('product_stock').insert({ warehouse_id: 1, product_id: product.id, quantity: qty });
+      }
+    }
+
+    const purchaseRow = await knex('purchases').where('id', purchasePkId).first();
+    const purchaseItemsRows = await knex('purchase_items').where('purchase_id', purchasePkId).orderBy('id', 'asc');
+    const responsePurchase = {
+      id: purchaseRow.bill_no,
+      bill_no: purchaseRow.bill_no,
+      supplierId: purchaseRow.supplier_id ? String(purchaseRow.supplier_id) : '',
+      farmerName: supplierRow?.supplier_name || supplierName || '',
+      productName: purchaseItemsRows[0]?.product_name || productName || '',
+      qtyKg: Number(purchaseItemsRows.reduce((sum, row) => sum + Number(row.qty || 0), 0)),
+      rate: Number(purchaseItemsRows[0]?.rate || rate || 0),
+      total: Number(purchaseRow.net_amount || purchaseTotal),
+      date: purchaseRow.purchase_date,
+      paymentMode: purchaseRow.payment_mode || paymentMode || 'Cash',
+      items: purchaseItemsRows.map((row) => ({
+        productId: row.product_id,
+        productName: row.product_name,
+        qtyKg: Number(row.qty),
+        rate: Number(row.rate),
+        total: Number(row.amount),
+      })),
+      note: purchaseRow.note || note || '',
+    };
+
+    try { await createNotification({ type: 'purchase', title: `Purchase ${responsePurchase.id}`, body: `Purchase ${responsePurchase.id} recorded`, data: responsePurchase, role: 'admin' }); } catch (e) {}
+    res.json({ success: true, purchase: responsePurchase });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -697,20 +1119,20 @@ app.post('/api/pos/purchases', async (req, res) => {
 // Customers
 app.get('/api/pos/customers', async (req, res) => {
   try {
-    const rows = await knex('customers').orderBy('name', 'asc');
+    const rows = await knex('customers').orderBy('full_name', 'asc');
     const customers = rows.map(c => ({
       _id: String(c.id),
-      name: c.name,
-      phone: c.phone,
+      id: String(c.id),
+      name: c.full_name,
+      full_name: c.full_name,
+      phone: c.phone || '',
       email: c.email || '',
-      login_id: c.login_id || '',
+      login_id: c.login_id ? String(c.login_id) : '',
       address: c.address || '',
-      productToBuy: c.productToBuy || '',
-      type: c.type || 'retail',
-      password: c.password || c.phone || '12345',
-      panNo: c.panNo || '',
-      alternativeAddress: c.alternativeAddress || '',
-      alternativePhone: c.alternativePhone || ''
+      panNo: c.pan_no || '',
+      pan_no: c.pan_no || '',
+      loyalty_points: Number(c.loyalty_points || 0),
+      opening_balance: Number(c.opening_balance || 0),
     }));
     res.json({ success: true, customers });
   } catch (err) {
@@ -760,7 +1182,7 @@ app.get('/api/orders', async (req, res) => {
 // Products endpoints (basic)
 app.get('/api/products', async (req, res) => {
   try {
-    const rows = await knex('products').select('id', 'nameEn', 'stock', 'unit', 'purchasePrice', 'sellingPrice', 'minStock').orderBy('nameEn', 'asc');
+    const rows = await knex('products').select('id', 'nameEn', 'stock', 'unit', 'purchasePrice', 'sellingPrice', 'minStock', 'imageUrl').orderBy('nameEn', 'asc');
     res.json({ success: true, products: rows });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -786,9 +1208,9 @@ app.post('/api/products/:id/minstock', requirePosAuth, requireRole(['owner','adm
 // Full CRUD for products
 app.post('/api/products', requirePosAuth, requireRole(['owner','admin']), async (req, res) => {
   try {
-    const { id, nameEn, nameNe, category, stock, unit, purchasePrice, sellingPrice, emoji, minStock } = req.body || {};
+    const { id, nameEn, nameNe, category, stock, unit, purchasePrice, sellingPrice, emoji, minStock, imageUrl } = req.body || {};
     if (!id || !nameEn) return res.status(400).json({ success: false, error: 'id and nameEn required' });
-    await knex('products').insert({ id: String(id), nameEn: String(nameEn), nameNe: String(nameNe || ''), category: String(category || ''), stock: Number(stock || 0), unit: String(unit || ''), purchasePrice: Number(purchasePrice || 0), sellingPrice: Number(sellingPrice || 0), emoji: String(emoji || '📦'), minStock: Number(minStock || 0) }).onConflict('id').merge();
+    await knex('products').insert({ id: String(id), nameEn: String(nameEn), nameNe: String(nameNe || ''), category: String(category || ''), stock: Number(stock || 0), unit: String(unit || ''), purchasePrice: Number(purchasePrice || 0), sellingPrice: Number(sellingPrice || 0), emoji: String(emoji || '📦'), minStock: Number(minStock || 0), imageUrl: String(imageUrl || '') }).onConflict('id').merge();
     const p = await knex('products').where('id', String(id)).first();
     res.json({ success: true, product: p });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -804,14 +1226,14 @@ app.put('/api/products/:id', requirePosAuth, requireRole(['owner','admin']), asy
     const sets = [];
     const vals = [];
     for (const k of keys) {
-      if (['nameEn','nameNe','category','stock','unit','purchasePrice','sellingPrice','emoji','minStock'].includes(k)) {
+      if (['nameEn','nameNe','category','stock','unit','purchasePrice','sellingPrice','emoji','minStock','imageUrl'].includes(k)) {
         sets.push(`${k} = ?`);
         vals.push(patch[k]);
       }
     }
     if (sets.length === 0) return res.status(400).json({ success: false, error: 'no updatable fields' });
     vals.push(id);
-    await knex('products').where('id', id).update(Object.fromEntries(keys.filter(k=>['nameEn','nameNe','category','stock','unit','purchasePrice','sellingPrice','emoji','minStock'].includes(k)).map(k=>[k, patch[k]])));
+    await knex('products').where('id', id).update(Object.fromEntries(keys.filter(k=>['nameEn','nameNe','category','stock','unit','purchasePrice','sellingPrice','emoji','minStock','imageUrl'].includes(k)).map(k=>[k, patch[k]])));
     const p = await knex('products').where('id', id).first();
     res.json({ success: true, product: p });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -1063,47 +1485,73 @@ app.post('/api/orders', async (req, res) => {
 
 app.post('/api/pos/customers', async (req, res) => {
   try {
-    const { _id, name, phone, email, login_id, address, productToBuy, type, password, panNo, alternativeAddress, alternativePhone } = req.body;
+    const { _id, id, name, full_name, phone, email, login_id, address, panNo, pan_no, loyalty_points, opening_balance } = req.body;
+    const customerName = String(full_name || name || '').trim();
+    const customerPan = String(pan_no || panNo || '').trim() || null;
+    const loginIdValue = login_id !== undefined && login_id !== null && String(login_id).trim() !== '' ? String(login_id).trim() : null;
+
+    if (!_id && !id && !customerName && !String(phone || '').trim()) {
+      return res.status(400).json({ success: false, error: 'Name and phone are required.' });
+    }
+
     if (_id) {
       const customerId = parseInt(_id);
-      await knex('customers').where('id', customerId).update({ name: name.trim(), phone: phone.trim(), email: email ? email.trim() : null, login_id: login_id ? login_id.trim() : null, address: address ? address.trim() : null, productToBuy: productToBuy ? productToBuy.trim() : null, type: type || 'retail', password: password ? password.trim() : phone.trim(), panNo: panNo ? panNo.trim() : null, alternativeAddress: alternativeAddress ? alternativeAddress.trim() : null, alternativePhone: alternativePhone ? alternativePhone.trim() : null });
+      await knex('customers').where('id', customerId).update({
+        full_name: customerName || undefined,
+        phone: phone ? String(phone).trim() : undefined,
+        email: email ? String(email).trim() : null,
+        login_id: loginIdValue,
+        address: address ? String(address).trim() : null,
+        pan_no: customerPan,
+        loyalty_points: loyalty_points !== undefined ? Number(loyalty_points || 0) : undefined,
+        opening_balance: opening_balance !== undefined ? Number(opening_balance || 0) : undefined,
+      });
       const updated = await knex('customers').where('id', customerId).first();
       res.json({
         success: true,
         customer: {
           _id: String(updated.id),
-          name: updated.name,
+          id: String(updated.id),
+          name: updated.full_name,
+          full_name: updated.full_name,
           phone: updated.phone,
           email: updated.email || '',
-          login_id: updated.login_id || '',
+          login_id: updated.login_id ? String(updated.login_id) : '',
           address: updated.address || '',
-          productToBuy: updated.productToBuy || '',
-          type: updated.type || 'retail',
-          password: updated.password || '',
-          panNo: updated.panNo || '',
-          alternativeAddress: updated.alternativeAddress || '',
-          alternativePhone: updated.alternativePhone || ''
+          panNo: updated.pan_no || '',
+          pan_no: updated.pan_no || '',
+          loyalty_points: Number(updated.loyalty_points || 0),
+          opening_balance: Number(updated.opening_balance || 0),
         }
       });
     } else {
-      const inserted = await knex('customers').insert({ name: name.trim(), phone: phone.trim(), email: email ? email.trim() : null, login_id: login_id ? login_id.trim() : null, address: address ? address.trim() : null, productToBuy: productToBuy ? productToBuy.trim() : null, type: type || 'retail', password: password ? password.trim() : phone.trim(), panNo: panNo ? panNo.trim() : null, alternativeAddress: alternativeAddress ? alternativeAddress.trim() : null, alternativePhone: alternativePhone ? alternativePhone.trim() : null });
+      const inserted = await knex('customers').insert({
+        full_name: customerName,
+        phone: String(phone).trim(),
+        email: email ? String(email).trim() : null,
+        login_id: loginIdValue,
+        address: address ? String(address).trim() : null,
+        pan_no: customerPan,
+        loyalty_points: loyalty_points !== undefined ? Number(loyalty_points || 0) : 0,
+        opening_balance: opening_balance !== undefined ? Number(opening_balance || 0) : 0,
+      });
       const createdId = Array.isArray(inserted) ? inserted[0] : inserted;
       const created = await knex('customers').where('id', createdId).first();
       res.json({
         success: true,
         customer: {
           _id: String(created.id),
-          name: created.name,
+          id: String(created.id),
+          name: created.full_name,
+          full_name: created.full_name,
           phone: created.phone,
           email: created.email || '',
-          login_id: created.login_id || '',
+          login_id: created.login_id ? String(created.login_id) : '',
           address: created.address || '',
-          productToBuy: created.productToBuy || '',
-          type: created.type || 'retail',
-          password: created.password || '',
-          panNo: created.panNo || '',
-          alternativeAddress: created.alternativeAddress || '',
-          alternativePhone: created.alternativePhone || ''
+          panNo: created.pan_no || '',
+          pan_no: created.pan_no || '',
+          loyalty_points: Number(created.loyalty_points || 0),
+          opening_balance: Number(created.opening_balance || 0),
         }
       });
     }
@@ -1177,6 +1625,35 @@ app.get('/api/pos/users', async (req, res) => {
 app.post('/api/pos/users', async (req, res) => {
   try {
     const { _id, name, username, role, phone, password, address, alternativePhone, bio, avatar, panNo, profilePhoto } = req.body;
+    const safeName = String(name || '').trim();
+    const safeUsername = normalizeLoginEmail(username);
+    const safeRole = normalizeLoginRole(role);
+    const safePhone = String(phone || '').trim();
+    const safePassword = String(password || '').trim();
+
+    if (!safeName || !safeUsername || !isAllowedLoginRole(safeRole)) {
+      return res.status(400).json({ success: false, error: 'Valid name, email, and role are required.' });
+    }
+
+    const existingByEmail = await knex('login')
+      .whereRaw('LOWER(email) = LOWER(?)', [safeUsername])
+      .andWhere(function () {
+        if (_id) this.whereNot('id', parseInt(_id));
+      })
+      .first();
+
+    if (existingByEmail) {
+      return res.status(409).json({ success: false, error: 'A user with this email already exists.' });
+    }
+
+    const resolvedPasswordHash = isStaffLoginRole(safeRole)
+      ? SHARED_LOGIN_PASSWORD_HASH
+      : (safePassword ? customerPasswordHash(safePassword, safeUsername) : null);
+
+    if (!resolvedPasswordHash) {
+      return res.status(400).json({ success: false, error: 'Password is required for this role.' });
+    }
+
     if (_id) {
       const userId = parseInt(_id);
       const existing = await knex('login').where('id', userId).first();
@@ -1184,9 +1661,7 @@ app.post('/api/pos/users', async (req, res) => {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
 
-      const passwordHash = SHARED_LOGIN_PASSWORD_HASH;
-
-      await knex('login').where('id', userId).update({ display_name: name.trim(), email: username.trim().toLowerCase(), role, phone: phone ? phone.trim() : null, password_hash: passwordHash, address: address ? address.trim() : null, alternative_phone: alternativePhone ? alternativePhone.trim() : null, bio: bio ? bio.trim() : null, avatar: avatar || '👤', pan_no: panNo ? panNo.trim() : null, profile_photo: profilePhoto ? profilePhoto.trim() : null });
+      await knex('login').where('id', userId).update({ display_name: safeName, full_name: safeName, email: safeUsername, role: safeRole, phone: safePhone || null, password_hash: resolvedPasswordHash, address: address ? address.trim() : null, alternative_phone: alternativePhone ? alternativePhone.trim() : null, bio: bio ? bio.trim() : null, avatar: avatar || '👤', pan_no: panNo ? panNo.trim() : null, profile_photo: profilePhoto ? profilePhoto.trim() : null });
       const updated = await knex('login').select('id', 'email', 'display_name', 'role', 'phone', 'address', 'alternative_phone', 'bio', 'avatar', 'pan_no', 'profile_photo').where('id', userId).first();
       res.json({
         success: true,
@@ -1206,9 +1681,7 @@ app.post('/api/pos/users', async (req, res) => {
         }
       });
     } else {
-      const passwordHash = SHARED_LOGIN_PASSWORD_HASH;
-
-      const inserted = await knex('login').insert({ display_name: name.trim(), email: username.trim().toLowerCase(), role, phone: phone ? phone.trim() : null, password_hash: passwordHash, address: address ? address.trim() : null, alternative_phone: alternativePhone ? alternativePhone.trim() : null, bio: bio ? bio.trim() : null, avatar: avatar || '👤', pan_no: panNo ? panNo.trim() : null, profile_photo: profilePhoto ? profilePhoto.trim() : null });
+      const inserted = await knex('login').insert({ display_name: safeName, full_name: safeName, email: safeUsername, role: safeRole, phone: safePhone || null, password_hash: resolvedPasswordHash, address: address ? address.trim() : null, alternative_phone: alternativePhone ? alternativePhone.trim() : null, bio: bio ? bio.trim() : null, avatar: avatar || '👤', pan_no: panNo ? panNo.trim() : null, profile_photo: profilePhoto ? profilePhoto.trim() : null });
       const createdId = Array.isArray(inserted) ? inserted[0] : inserted;
       const created = await knex('login').select('id', 'email', 'display_name', 'role', 'phone', 'address', 'alternative_phone', 'bio', 'avatar', 'pan_no', 'profile_photo').where('id', createdId).first();
       res.json({
@@ -1387,6 +1860,19 @@ app.post('/api/chats', async (req, res) => {
     const inserted = await knex('chats').insert({ customerId: String(customerId), sender: String(sender), message: String(message) });
     const chatId = Array.isArray(inserted) ? inserted[0] : inserted;
     const chat = await knex('chats').where('id', chatId).first();
+
+    if (chat) {
+      const payload = {
+        id: chat.id,
+        customerId: String(chat.customerId),
+        sender: chat.sender,
+        message: chat.message,
+        timestamp: chat.timestamp,
+      };
+      io.to(`chat_${chat.customerId}`).emit('receive_message', payload);
+      io.to('admin').emit('receive_message', payload);
+    }
+
     res.json({
       success: true,
       chat: {
@@ -1433,6 +1919,19 @@ app.get('/api/admin/chats', async (req, res) => {
   }
 });
 
+// Ensure API routes always return JSON on unhandled errors (helps clients avoid HTML error pages)
+app.use((err, req, res, next) => {
+  try {
+    console.error('Unhandled server error:', err && (err.stack || err.message || err));
+  } catch (e) {
+    console.error('Error while logging error', e);
+  }
+  if (req && req.originalUrl && String(req.originalUrl).startsWith('/api')) {
+    return res.status(err && err.status ? err.status : 500).json({ success: false, error: err && (err.message || 'Internal server error') });
+  }
+  return next(err);
+});
+
 if (process.env.NODE_ENV !== 'test') {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Dhakal Traders API running at http://localhost:${PORT}`);
@@ -1443,6 +1942,39 @@ if (process.env.NODE_ENV !== 'test') {
   // When running tests, do not auto-listen. Tests will start the server on an ephemeral port.
   console.log('Dhakal Traders API running in test mode — http server not auto-listening');
 }
+
+let isShuttingDown = false;
+const shutdown = (signal) => {
+  if (process.env.NODE_ENV === 'test' || isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`Received ${signal || 'shutdown'}; closing server...`);
+
+  const forceExitTimer = setTimeout(() => process.exit(0), 5000);
+  forceExitTimer.unref?.();
+
+  try {
+    if (httpServer.listening) {
+      httpServer.close(() => {
+        try {
+          sqliteDb.close(() => process.exit(0));
+        } catch {
+          process.exit(0);
+        }
+      });
+    } else {
+      try {
+        sqliteDb.close(() => process.exit(0));
+      } catch {
+        process.exit(0);
+      }
+    }
+  } catch {
+    process.exit(0);
+  }
+};
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
 
 // Export app and server objects for tests and other tooling
 export { app, httpServer, io, knex };

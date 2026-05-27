@@ -7,6 +7,14 @@ function NRS(n: number) {
   return 'रू ' + n.toLocaleString('en-NP', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const saleRef = (s: any) => String(s.invoice_no || s.id || '');
+const saleDate = (s: any) => String(s.bill_date || s.date || s.created_at || '');
+const salePaymentMode = (s: any) => String(s.paymentMode || 'Cash');
+const saleCustomerName = (s: any) => String(s.customerName || s.full_name || 'Walk-in');
+const saleAmount = (s: any) => Number(s.total ?? 0);
+const saleAmountPaid = (s: any) => Number(s.amountPaid ?? 0);
+const saleAmountDue = (s: any) => Number(s.amountDue ?? 0);
+
 export default function OrdersPage() {
   const { sales, setSales, setReceiptData, cashier, products, setProducts, t } = usePOS();
 
@@ -26,25 +34,25 @@ export default function OrdersPage() {
 
   const visibleSales = useMemo(() => {
     return isCustomer
-      ? sales.filter(s => s.customerId === cashier?.id || s.customerName === cashier?.name)
+      ? sales.filter(s => s.customerId === cashier?.id || s.customerLoginId === cashier?.id || s.customerName === cashier?.full_name || s.customerName === cashier?.name)
       : sales;
   }, [sales, cashier, isCustomer]);
 
   const filteredSales = useMemo(() => {
     const q = search.toLowerCase();
     return visibleSales.filter(s => {
-      if (q && !s.id.toLowerCase().includes(q) && !(s.customerName || '').toLowerCase().includes(q) && !(s.cashier || '').toLowerCase().includes(q)) return false;
+      if (q && !saleRef(s).toLowerCase().includes(q) && !String(saleCustomerName(s)).toLowerCase().includes(q) && !(String(s.cashier || '').toLowerCase().includes(q))) return false;
       if (filterStatus !== 'all' && s.status !== filterStatus) return false;
-      if (filterPayMode !== 'all' && s.paymentMode !== filterPayMode) return false;
-      if (dateFrom && s.date < dateFrom) return false;
-      if (dateTo && s.date > dateTo) return false;
+      if (filterPayMode !== 'all' && salePaymentMode(s) !== filterPayMode) return false;
+      if (dateFrom && saleDate(s) < dateFrom) return false;
+      if (dateTo && saleDate(s) > dateTo) return false;
       return true;
     });
   }, [visibleSales, search, filterStatus, filterPayMode, dateFrom, dateTo]);
 
-  const totalRevenue = filteredSales.filter(s => !s.isReturn).reduce((a, s) => a + s.total, 0);
-  const totalDue = filteredSales.reduce((a, s) => a + (s.amountDue || 0), 0);
-  const totalReturns = filteredSales.filter(s => s.isReturn).reduce((a, s) => a + s.total, 0);
+  const totalRevenue = filteredSales.filter(s => !s.isReturn).reduce((a, s) => a + saleAmount(s), 0);
+  const totalDue = filteredSales.reduce((a, s) => a + saleAmountDue(s), 0);
+  const totalReturns = filteredSales.filter(s => s.isReturn).reduce((a, s) => a + saleAmount(s), 0);
 
   const handleReturn = () => {
     if (!selectedSale) return;
@@ -119,6 +127,7 @@ export default function OrdersPage() {
         <select className="pos-form-select" value={filterPayMode} onChange={e => setFilterPayMode(e.target.value)}>
           <option value="all">{t('सबै भुक्तानी', 'All Payment')}</option>
           <option>Cash</option><option>Card</option><option>E-Sewa</option><option>Khalti</option><option>Credit</option>
+          <option>QR</option>
         </select>
         <input type="date" className="pos-form-input" style={{ width: 150 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title={t('देखि', 'From')} />
         <input type="date" className="pos-form-input" style={{ width: 150 }} value={dateTo} onChange={e => setDateTo(e.target.value)} title={t('सम्म', 'To')} />
@@ -156,18 +165,18 @@ export default function OrdersPage() {
               {filteredSales.map(s => (
                 <tr key={s.id} className={`ord-row ${s.isReturn ? 'is-return' : ''} ${s.status}`}>
                   <td>
-                    <button className="invoice-link" onClick={() => setReceiptData(s)}>{s.id}</button>
+                    <button className="invoice-link" onClick={() => setReceiptData(s)}>{saleRef(s)}</button>
                     {s.isReturn && <span className="return-tag">{t('फिर्ता', 'RETURN')}</span>}
                     {s.returnOf && <div style={{ fontSize: 10, color: 'var(--pos-text-muted)' }}>of {s.returnOf}</div>}
                   </td>
                   <td>
-                    <strong>{s.customerName || t('Walk-in', 'Walk-in')}</strong>
-                    {s.customerPhone && <div style={{ fontSize: 11, color: 'var(--pos-text-muted)' }}>{s.customerPhone}</div>}
+                    <strong>{saleCustomerName(s) || t('Walk-in', 'Walk-in')}</strong>
+                    { s.customerPhone && <div style={{ fontSize: 11, color: 'var(--pos-text-muted)' }}>{s.customerPhone}</div> }
                   </td>
-                  <td style={{ fontSize: 12 }}>{s.date}</td>
+                  <td style={{ fontSize: 12 }}>{saleDate(s)}</td>
                   <td>
-                    <span className={`pay-mode-badge pay-mode-${(s.paymentMode || 'cash').toLowerCase().replace('-', '')}`}>
-                      {s.paymentMode || 'Cash'}
+                      <span className={`pay-mode-badge pay-mode-${(salePaymentMode(s) || 'cash').toLowerCase().replace('-', '')}`}>
+                      {salePaymentMode(s) || 'Cash'}
                     </span>
                   </td>
                   <td>
@@ -178,10 +187,10 @@ export default function OrdersPage() {
                       {(s.items || []).length > 2 && <div className="ord-item-chip muted">+{(s.items || []).length - 2} {t('थप', 'more')}</div>}
                     </div>
                   </td>
-                  <td className="num"><strong>{NRS(Math.abs(s.total))}</strong></td>
-                  <td className="num" style={{ color: 'var(--pos-success)' }}>{NRS(Math.abs(s.amountPaid))}</td>
-                  <td className="num" style={{ color: s.amountDue > 0 ? 'var(--pos-danger)' : 'var(--pos-success)' }}>
-                    {s.amountDue > 0 ? NRS(s.amountDue) : <i className="ri-check-double-line" />}
+                  <td className="num"><strong>{NRS(Math.abs(saleAmount(s)))}</strong></td>
+                  <td className="num" style={{ color: 'var(--pos-success)' }}>{NRS(Math.abs(saleAmountPaid(s)))}</td>
+                  <td className="num" style={{ color: saleAmountDue(s) > 0 ? 'var(--pos-danger)' : 'var(--pos-success)' }}>
+                    {saleAmountDue(s) > 0 ? NRS(saleAmountDue(s)) : <i className="ri-check-double-line" />}
                   </td>
                   <td>
                     <span className={`pos-badge ${s.status === 'completed' ? 'green' : s.status === 'returned' ? 'red' : s.status === 'pending' ? 'yellow' : 'blue'}`}>
@@ -219,7 +228,7 @@ export default function OrdersPage() {
             </div>
             <div className="modal-body">
               <div className="return-sale-preview">
-                <strong>{selectedSale.customerName || 'Walk-in'}</strong> · {selectedSale.date}
+                <strong>{saleCustomerName(selectedSale) || 'Walk-in'}</strong> · {selectedSale.date}
                 <div>{NRS(selectedSale.total)}</div>
               </div>
               <div className="pos-input-group" style={{ marginTop: 12 }}>

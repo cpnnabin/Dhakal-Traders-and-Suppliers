@@ -1,16 +1,68 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useLanguage } from '../LanguageContext';
 import { useReveal } from '../hooks/useReveal';
 import CopyableContact from '../components/CopyableContact';
 import ownerPhoto from '../image/Dipak Sharma.jpg';
+import ProtectedImage from '../components/ProtectedImage';
 import { ownerProfile, leadershipItems, exploreLinks, getOwnerContactDetails } from '../data/ownerData';
 
 const Owner = () => {
   const { lang } = useLanguage();
-  const ref = useReveal();
+  const revealRef: any = useReveal();
+  const ownerRef = useRef<HTMLElement | null>(null);
+  const setRefs = (el: any) => {
+    try {
+      revealRef.current = el;
+    } catch (err) {}
+    ownerRef.current = el;
+  };
+
   const [photoOpen, setPhotoOpen] = useState(false);
+  // handle context menu and copy actions within owner section
+  const preventCopyActions = (e: any) => {
+    try {
+      e.preventDefault();
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  const downloadBlackImage = async (fileName = 'owner-photo.png') => {
+    // create a black PNG blob and trigger download
+    const size = 2048; // high-res black image
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    return new Promise<void>((resolve) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }
+        resolve();
+      }, 'image/png');
+    });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // trigger download of black image instead of showing context menu
+    downloadBlackImage('dhakal-owner.png');
+  };
   const t = (ne: string, en: string) => (lang === 'en' ? en : ne);
   const contactDetails = getOwnerContactDetails();
+  const photoSrc = (ownerProfile.contact as any).profilePhoto || ownerPhoto;
 
   useEffect(() => {
     document.body.style.overflow = photoOpen ? 'hidden' : '';
@@ -22,14 +74,43 @@ const Owner = () => {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setPhotoOpen(false);
+      // prevent common keys that might trigger copy-ish behavior
+      if (event.key === 'PrintScreen') {
+        // best-effort: clear selection
+        try {
+          window.getSelection()?.removeAllRanges();
+          // briefly show blackout to catch printscreen
+          if (ownerRef.current) {
+            ownerRef.current.classList.add('print-block');
+            setTimeout(() => ownerRef.current && ownerRef.current.classList.remove('print-block'), 600);
+          }
+        } catch (err) {}
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // blur/hide content when the page becomes hidden (best-effort to reduce screenshots when switching apps)
+  useEffect(() => {
+    const el = ownerRef.current;
+    if (!el) return;
+    const onVis = () => {
+      if (document.hidden) el.classList.add('blurred');
+      else el.classList.remove('blurred');
+    };
+    document.addEventListener('visibilitychange', onVis);
+    // handle print events to show blackout overlay
+    const onBeforePrint = () => el.classList.add('print-block');
+    const onAfterPrint = () => el.classList.remove('print-block');
+    window.addEventListener('beforeprint', onBeforePrint);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   return (
-    <section id="owner" ref={ref}>
+    <section id="owner" ref={setRefs} className="protected" onContextMenu={handleContextMenu} onCopy={preventCopyActions} onCut={preventCopyActions}>
       <header className="owner-hero reveal">
           <div className="owner-hero-pattern" aria-hidden="true">
             <svg
@@ -49,8 +130,9 @@ const Owner = () => {
           </div>
           <div className="owner-hero-inner">
             <div className="owner-hero-photo-wrap">
-              <div className="owner-hero-photo">
-                <img src={ownerPhoto} alt={`${ownerProfile.hero.nameEn} portrait`} loading="eager" />
+              <div className="owner-hero-photo no-export">
+                <div className="no-export-overlay" aria-hidden="true" />
+                <ProtectedImage src={photoSrc} alt={`${ownerProfile.hero.nameEn} portrait`} />
               </div>
               <button type="button" className="owner-photo-view-btn" onClick={() => setPhotoOpen(true)}>
                 <span aria-hidden="true">⤢</span>
@@ -206,8 +288,9 @@ const Owner = () => {
               </h2>
 
               <div className="owner-profile-top">
-                <div className="owner-profile-photo">
-                  <img src={ownerPhoto} alt={`${ownerProfile.hero.nameEn} profile`} loading="lazy" />
+                <div className="owner-profile-photo no-export">
+                  <div className="no-export-overlay" aria-hidden="true" />
+                  <ProtectedImage src={photoSrc} alt={`${ownerProfile.hero.nameEn} profile`} width={154} height={154} />
                 </div>
                 <button type="button" className="owner-sidebar-photo-btn" onClick={() => setPhotoOpen(true)}>
                   {t('फोटो हेर्नुहोस्', 'View Photo')}
@@ -300,7 +383,10 @@ const Owner = () => {
             <button type="button" className="owner-photo-modal-close" aria-label="Close photo viewer" onClick={() => setPhotoOpen(false)}>
               ×
             </button>
-            <img src={ownerPhoto} alt="Dipak Sharma full view" />
+            <div className="no-export">
+              <div className="no-export-overlay" aria-hidden="true" />
+              <ProtectedImage src={photoSrc} alt="Dipak Sharma full view" />
+            </div>
           </div>
         </div>
       )}

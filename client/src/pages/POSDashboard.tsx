@@ -2,6 +2,7 @@
 // Sidebar + header wrapper. Each sidebar item renders its own dedicated page.
 
 import React, { useEffect, useState, useRef } from 'react';
+import getAvatarSrc from '../utils/avatar';
 import { POSProvider, usePOS } from './pos/POSContext';
 import { getPOSSession } from './POSLogin';
 import POSDashboardPage from './pos/Dashboard';
@@ -21,15 +22,14 @@ import logoImg          from '../image/Dhakal Traders Logo .png';
 import { connectWithToken, joinRoom } from '../sockets/socket';
 import NotificationsCenter from '../components/NotificationsCenter';
 import { useLanguage }  from '../LanguageContext';
-
-type Tab = 'dashboard' | 'billing' | 'entry' | 'purchase' | 'stock' | 'reports' | 'ledger' | 'users' | 'customers' | 'orders' | 'chats';
+import { getVisiblePosTabs, POS_NAV_ITEMS, POS_TAB_TITLES, POS_TAB_TITLES_SHORT, type POSTab } from '../features/sales/pos/posWorkflow';
 
 interface Props { onLogout: () => void; }
 
 function POSShell({ onLogout }: Props) {
   const { lang, setLang } = useLanguage();
   const { t, cashier, users, apiCall, setCashier, setUsers, setSales, setReceiptData } = usePOS();
-  const [tab,       setTab]       = useState<Tab>(() => {
+  const [tab,       setTab]       = useState<POSTab>(() => {
     const role = getPOSSession().role;
     if (role === 'admin') return 'reports';
     if (role === 'customer') return 'orders';
@@ -89,6 +89,18 @@ function POSShell({ onLogout }: Props) {
     return null;
   }, [users, cashier?.id, cashier?.username, cashier?.name]);
 
+  const normalizeProfilePhotoForSave = (value: string) => {
+    const src = String(value || '').trim();
+    if (!src) return '';
+    if (/^data:image\//i.test(src)) return src;
+    if (/^https?:\/\//i.test(src)) {
+      const [base, hash = ''] = src.split('#');
+      const separator = base.includes('?') ? '&' : '?';
+      return `${base}${separator}v=${Date.now()}${hash ? `#${hash}` : ''}`;
+    }
+    return src;
+  };
+
   const openProfileEditor = (tabToOpen: 'profile' | 'password') => {
     const profileUser = activeUser;
 
@@ -144,7 +156,7 @@ function POSShell({ onLogout }: Props) {
         bio: activeModalTab === 'profile' ? editBio.trim() : (targetUser?.bio || ''),
         avatar: activeModalTab === 'profile' ? editAvatar : (targetUser?.avatar || '👤'),
         panNo: activeModalTab === 'profile' ? editPanNo.trim() : (targetUser?.panNo || ''),
-        profilePhoto: activeModalTab === 'profile' ? editProfilePhoto : (targetUser?.profilePhoto || ''),
+        profilePhoto: activeModalTab === 'profile' ? normalizeProfilePhotoForSave(editProfilePhoto) : (targetUser?.profilePhoto || ''),
       };
 
       if (activeModalTab === 'password') {
@@ -221,7 +233,7 @@ function POSShell({ onLogout }: Props) {
     return () => document.removeEventListener('mousedown', closeProfile);
   }, [profileDropdownOpen]);
 
-  const selectTab = (id: Tab) => {
+  const selectTab = (id: POSTab) => {
     setTab(id);
     setMobileNavOpen(false);
   };
@@ -234,54 +246,12 @@ function POSShell({ onLogout }: Props) {
       const tabParam = url.searchParams.get('tab');
 
       if (tabParam && ['dashboard', 'billing', 'entry', 'purchase', 'stock', 'reports', 'ledger', 'users', 'customers', 'orders', 'chats'].includes(tabParam)) {
-        setTab(tabParam as Tab);
+        setTab(tabParam as POSTab);
       }
 
       if (customerId) setTab('billing');
     } catch {}
   }, []);
-
-  const navItems: { id: Tab; icon: string; label: [string, string] }[] = [
-    { id: 'dashboard', icon: 'ri-dashboard-line',         label: ['ड्यासबोर्ड',       'Dashboard']      },
-    { id: 'billing',   icon: 'ri-coins-line',             label: ['बिलिङ (POS)',        'Billing (POS)']  },
-    { id: 'orders',    icon: 'ri-file-list-3-line',       label: ['अर्डर इतिहास',        'Order History']  },
-    { id: 'customers', icon: 'ri-user-heart-line',        label: ['पार्टीहरू',          'Parties']      },
-    { id: 'entry',     icon: 'ri-box-3-line',             label: ['उत्पादन / स्टक', 'Products / Stock']  },
-    { id: 'purchase',  icon: 'ri-shopping-basket-2-line', label: ['खरिद',               'Purchase']       },
-    { id: 'stock',     icon: 'ri-database-2-line',        label: ['स्टक', 'Stock'] },
-    { id: 'reports',   icon: 'ri-line-chart-line',        label: ['बिक्री',             'Sales']          },
-    { id: 'ledger',    icon: 'ri-book-open-line',         label: ['लेजर / जर्नल',       'Ledger']         },
-    { id: 'chats',     icon: 'ri-chat-3-line',            label: ['च्याट सपोर्ट',       'Chat Support']   },
-    { id: 'users',     icon: 'ri-group-line',             label: ['कर्मचारी',           'Users']          },
-  ];
-
-  const tabTitles: Record<Tab, [string, string]> = {
-    dashboard: ['ड्यासबोर्ड — अवलोकन',              'Dashboard — Overview'],
-    billing:   ['बिलिङ टर्मिनल (POS)',               'Billing Terminal (POS)'],
-    orders:    ['अर्डर इतिहास विवरण',                 'Order History'],
-    customers: ['पार्टी स्टेटमेन्ट',                   'Party Statement'],
-    entry:     ['उत्पादन प्रविष्टि',                 'Product Entry'],
-    purchase:  ['कृषक थोक खरिद',                     'Farmer Purchase'],
-    stock:     ['स्टक / म्याद विवरण',                'Stock & Expiry'],
-    reports:   ['बिक्री रिपोर्ट',                    'Sales'],
-    ledger:    ['लेजर तथा जर्नल खाता',               'Ledger & Journal'],
-    chats:     ['ग्राहक च्याट',                      'Customer Chats'],
-    users:     ['कर्मचारी सेटिङ',                    'Staff Accounts'],
-  };
-
-  const tabTitlesShort: Record<Tab, [string, string]> = {
-    dashboard: ['ड्यासबोर्ड', 'Dashboard'],
-    billing:   ['बिलिङ', 'Billing'],
-    orders:    ['अर्डर', 'Orders'],
-    customers: ['पार्टी', 'Parties'],
-    entry:     ['उत्पादन', 'Products'],
-    purchase:  ['खरिद', 'Purchase'],
-    stock:     ['स्टक', 'Stock'],
-    reports:   ['रिपोर्ट', 'Reports'],
-    ledger:    ['लेजर', 'Ledger'],
-    chats:     ['च्याट', 'Chats'],
-    users:     ['कर्मचारी', 'Staff'],
-  };
 
   return (
     <div className="pos-container">
@@ -310,24 +280,7 @@ function POSShell({ onLogout }: Props) {
         </div>
 
         <ul className="pos-sidebar-menu">
-          {navItems.filter(item => {
-            const role = (cashier && cashier.role) || getPOSSession().role || 'owner';
-            if (role === 'owner') return true;
-            if (role === 'admin') {
-              return ['dashboard', 'billing', 'entry', 'purchase', 'reports', 'ledger', 'stock', 'users', 'customers', 'orders', 'chats'].includes(item.id);
-            }
-            if (role === 'cashier') {
-              return ['billing', 'purchase', 'reports', 'ledger', 'customers', 'stock', 'orders', 'chats'].includes(item.id);
-            }
-            if (role === 'supplier') {
-              return ['orders', 'chats'];
-            }
-            if (role === 'customer') {
-              // Allow customers to access Billing (POS) as well
-              return ['billing', 'orders', 'chats', 'customers'].includes(item.id);
-            }
-            return false;
-          }).map(item => (
+          {POS_NAV_ITEMS.filter(item => getVisiblePosTabs((cashier && cashier.role) || getPOSSession().role || 'owner').includes(item.id)).map(item => (
             <li
               key={item.id}
               className={`pos-menu-item${tab === item.id ? ' active' : ''}`}
@@ -376,13 +329,15 @@ function POSShell({ onLogout }: Props) {
             <button type="button" className="pos-collapse-btn pos-desktop-only" onClick={() => setCollapsed(c => !c)}>
               <i className={collapsed ? 'ri-arrow-right-s-line' : 'ri-arrow-left-s-line'} />
             </button>
-            <div className="pos-header-titles">
-              <h1 className="pos-workspace-title">
-                <span className="pos-title-full">{t(tabTitles[tab][0], tabTitles[tab][1])}</span>
-                <span className="pos-title-short">{t(tabTitlesShort[tab][0], tabTitlesShort[tab][1])}</span>
-              </h1>
-              <span className="pos-header-subtitle" aria-hidden="true">{time}</span>
-            </div>
+            {tab !== 'billing' ? (
+              <div className="pos-header-titles">
+                <h1 className="pos-workspace-title">
+                  <span className="pos-title-full">{t(POS_TAB_TITLES[tab][0], POS_TAB_TITLES[tab][1])}</span>
+                  <span className="pos-title-short">{t(POS_TAB_TITLES_SHORT[tab][0], POS_TAB_TITLES_SHORT[tab][1])}</span>
+                </h1>
+                <span className="pos-header-subtitle" aria-hidden="true">{time}</span>
+              </div>
+            ) : null}
           </div>
 
           <div className="pos-header-search pos-desktop-only">
@@ -411,11 +366,14 @@ function POSShell({ onLogout }: Props) {
                   style={{ cursor: 'pointer', position: 'relative' }}
                 >
                   <div className="pos-cashier-avatar" style={{ fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', width: 28, height: 28, borderRadius: '50%' }}>
-                    {activeUser?.profilePhoto ? (
-                      <img src={activeUser.profilePhoto} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                    ) : (
-                      activeUser?.avatar || '👤'
-                    )}
+                    {(() => {
+                      const src = getAvatarSrc(activeUser);
+                      return src ? (
+                        <img src={src} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                      ) : (
+                        activeUser?.avatar || '👤'
+                      );
+                    })()}
                   </div>
                   <span className="pos-cashier-name">{activeUser?.name || cashier?.name || 'Cashier'}</span>
                   <i className="ri-arrow-down-s-line pos-cashier-caret" />
@@ -437,11 +395,14 @@ function POSShell({ onLogout }: Props) {
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 8 }}>
                         <div style={{ fontSize: 28, width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: '50%', background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                          {activeUser?.profilePhoto ? (
-                            <img src={activeUser.profilePhoto} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                          ) : (
-                            activeUser?.avatar || '👤'
-                          )}
+                          {(() => {
+                            const src = getAvatarSrc(activeUser);
+                            return src ? (
+                              <img src={src} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                            ) : (
+                              activeUser?.avatar || '👤'
+                            );
+                          })()}
                         </div>
                         <div>
                           <div style={{ color: '#F1F5F9', fontWeight: 600, fontSize: 13 }}>{activeUser?.name || cashier?.name}</div>
@@ -565,7 +526,7 @@ function POSShell({ onLogout }: Props) {
 
         {/* ── Page content ── */}
         <div className="pos-page-content">
-          {tab === 'dashboard' && <POSDashboardPage />}
+          {tab === 'dashboard' && <POSDashboardPage role={(cashier && cashier.role) || getPOSSession().role || 'owner'} />}
           {tab === 'billing'   && <BillingPage />}
           {tab === 'orders'    && <OrdersPage />}
           {tab === 'customers' && <PartiesPage />}

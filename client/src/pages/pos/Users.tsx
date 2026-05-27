@@ -1,6 +1,8 @@
 // ─── POS Page: Unified User Management — All Roles in One Panel ───────────────
 import React from 'react';
 import { usePOS } from './POSContext';
+import ImageUpload from '../../components/ImageUpload';
+import getAvatarSrc from '../../utils/avatar';
 
 const ROLES = [
   { value: 'owner',    label: 'Owner',    icon: '👑', color: 'purple', desc: 'Full system access' },
@@ -12,12 +14,13 @@ const ROLES = [
 
 export default function UsersPage() {
   const { users, setUsers, apiCall, t } = usePOS();
+  const displayUsers = users || [];
   const [editingUser, setEditingUser] = React.useState<any>(null);
   const [activeRole, setActiveRole] = React.useState<string>('all');
   const [search, setSearch] = React.useState('');
   const [showForm, setShowForm] = React.useState(false);
   const [formData, setFormData] = React.useState({
-    name: '', username: '', email: '', phone: '', role: 'cashier', status: 'active', password: ''
+    name: '', username: '', email: '', phone: '', pan: '', avatar: '', profilePhoto: '', address: '', alternativePhone: '', role: 'cashier', status: 'active', password: ''
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,16 +37,15 @@ export default function UsersPage() {
   const resetForm = () => {
     setEditingUser(null);
     setShowForm(false);
-    setFormData({ name: '', username: '', email: '', phone: '', role: 'cashier', status: 'active', password: '' });
+    setFormData({ name: '', username: '', email: '', phone: '', pan: '', avatar: '', profilePhoto: '', address: '', alternativePhone: '', role: 'cashier', status: 'active', password: '' });
   };
 
   const handleEdit = (u: any) => {
     setEditingUser(u);
-    setFormData({ name: u.name || '', username: u.username || '', email: u.email || '', phone: u.phone || '', role: u.role || 'cashier', status: u.status || 'active', password: '' });
+    setFormData({ name: u.name || '', username: u.username || '', email: u.email || '', phone: u.phone || '', pan: u.pan || '', avatar: u.avatar || '', profilePhoto: u.profilePhoto || '', address: u.address || '', alternativePhone: u.alternativePhone || '', role: u.role || 'cashier', status: u.status || 'active', password: '' });
     setShowForm(true);
   };
-
-  const filteredUsers = (users || []).filter((u: any) => {
+  const filteredUsers = (displayUsers || []).filter((u: any) => {
     const q = search.toLowerCase();
     const matchRole = activeRole === 'all' || u.role === activeRole;
     const matchSearch = !q || u.name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
@@ -58,11 +60,11 @@ export default function UsersPage() {
       <div className="users-toolbar">
         <div className="role-tabs">
           <button className={`role-tab ${activeRole === 'all' ? 'active' : ''}`} onClick={() => setActiveRole('all')}>
-            {t('सबै', 'All')} <span className="tab-count">{(users || []).length}</span>
+            {t('सबै', 'All')} <span className="tab-count">{displayUsers.length}</span>
           </button>
           {ROLES.map(r => (
             <button key={r.value} className={`role-tab role-tab--${r.color} ${activeRole === r.value ? 'active' : ''}`} onClick={() => setActiveRole(r.value)}>
-              {r.icon} {r.label} <span className="tab-count">{(users || []).filter((u: any) => u.role === r.value).length}</span>
+              {r.icon} {r.label} <span className="tab-count">{displayUsers.filter((u: any) => u.role === r.value).length}</span>
             </button>
           ))}
         </div>
@@ -75,19 +77,7 @@ export default function UsersPage() {
         </button>
       </div>
 
-      {/* Role Permission Cards */}
-      <div className="role-permission-cards">
-        {ROLES.map(r => (
-          <div key={r.value} className={`rpc rpc--${r.color}`}>
-            <span className="rpc-icon">{r.icon}</span>
-            <div>
-              <strong>{r.label}</strong>
-              <p>{r.desc}</p>
-            </div>
-            <span className="rpc-count">{(users || []).filter((u: any) => u.role === r.value).length}</span>
-          </div>
-        ))}
-      </div>
+      {/* Role Permission Cards removed per request */}
 
       {/* User List */}
       <div className="pos-panel">
@@ -103,20 +93,25 @@ export default function UsersPage() {
           <div className="users-grid">
             {filteredUsers.map((u: any) => {
               const role = getRoleInfo(u.role);
+              const displayUsername = u.username ? (String(u.username).startsWith('@') ? u.username : `@${u.username}`) : '';
               return (
-                <div key={u._id} className={`user-card user-card--${role.color}`}>
-                  <div className="uc-avatar">{u.avatar || role.icon}</div>
-                  <div className="uc-info">
-                    <strong className="uc-name">{u.name}</strong>
-                    <span className="uc-username">@{u.username}</span>
-                    {u.email && <span className="uc-email"><i className="ri-mail-line" /> {u.email}</span>}
-                    {u.phone && <span className="uc-phone"><i className="ri-phone-line" /> {u.phone}</span>}
+                <div key={u._id} className={`user-line user-line--${role.color}`}>
+                  <div className="ul-avatar">{(() => { const src = getAvatarSrc(u); return src ? <img src={src} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} /> : (u.avatar || role.icon); })()}</div>
+                  <div className="ul-content">
+                    <div className="ul-top"><strong className="ul-name">{u.name}</strong> <span className="ul-username">{displayUsername}</span></div>
+                    <div className="ul-bottom">
+                      <span className="ul-phone">{u.phone}</span>
+                      {u.email && <span className="ul-email">{u.email}</span>}
+                      {u.pan && <span className="ul-pan">PAN: {u.pan}</span>}
+                      {u.address && <span className="ul-address">{u.address}</span>}
+                      {u.alternativePhone && <span className="ul-altphone">{u.alternativePhone} (Alt)</span>}
+                    </div>
                   </div>
-                  <div className="uc-meta">
-                    <span className={`pos-badge ${role.color}`}>{role.icon} {u.role}</span>
-                    <span className={`pos-badge ${u.status === 'active' ? 'green' : 'red'}`}>{u.status || 'active'}</span>
+                  <div className="ul-right">
+                    <div className={`pos-badge ${role.color}`}><span className="role-icon">{role.icon}</span> {u.role}</div>
+                    <div className={`pos-badge ${u.status === 'active' ? 'green' : 'red'}`}>{u.status || 'active'}</div>
+                    <button className="pos-sec-btn small" onClick={() => handleEdit(u)} style={{ marginTop: 8 }}><i className="ri-edit-line" /></button>
                   </div>
-                  <button className="pos-sec-btn small" onClick={() => handleEdit(u)}><i className="ri-edit-line" /></button>
                 </div>
               );
             })}
@@ -151,22 +146,49 @@ export default function UsersPage() {
                   <input type="text" className="pos-form-input" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} />
                 </div>
                 <div className="pos-input-group">
+                  <label>{t('ठेगाना', 'Address')}</label>
+                  <input type="text" className="pos-form-input" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} />
+                </div>
+                <div className="pos-input-group">
+                  <label>{t('Pan', 'Pan')}</label>
+                  <input type="text" className="pos-form-input" value={formData.pan} onChange={e => setFormData({ ...formData, pan: e.target.value })} />
+                </div>
+                <div className="pos-input-group">
+                  <label>{t('Avatar', 'Avatar (emoji or text)')}</label>
+                  <input type="text" className="pos-form-input" value={formData.avatar} onChange={e => setFormData({ ...formData, avatar: e.target.value })} placeholder="🧑‍🌾 or initials" />
+                </div>
+                <div className="pos-input-group">
+                  <label>{t('Profile Photo', 'Profile Photo')}</label>
+                  <ImageUpload
+                    initialImageUrl={formData.profilePhoto}
+                    buttonLabel={t('अपलोड', 'Upload')}
+                    title={t('प्रोफाइल फोटो', 'Profile Photo')}
+                    onUploaded={(url) => setFormData({ ...formData, profilePhoto: url })}
+                  />
+                </div>
+                <div className="pos-input-group">
+                  <label>{t('वैकल्पिक फोन', 'Alt. phone')}</label>
+                  <input type="text" className="pos-form-input" value={formData.alternativePhone} onChange={e => setFormData({ ...formData, alternativePhone: e.target.value })} />
+                </div>
+                <div className="pos-input-group">
                   <label>{t('भूमिका', 'Role')}</label>
                   <div className="role-select-grid">
-                    {ROLES.map(r => (
+                    {ROLES.filter(r => r.value !== 'owner' && r.value !== 'admin').map(r => (
                       <button type="button" key={r.value} className={`role-select-btn role-select-btn--${r.color} ${formData.role === r.value ? 'active' : ''}`} onClick={() => setFormData({ ...formData, role: r.value })}>
                         {r.icon} {r.label}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="pos-input-group">
-                  <label>{t('अवस्था', 'Status')}</label>
-                  <select className="pos-form-select" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                    <option value="active">{t('सक्रिय', 'Active')}</option>
-                    <option value="inactive">{t('निष्क्रिय', 'Inactive')}</option>
-                  </select>
-                </div>
+                {editingUser && (
+                  <div className="pos-input-group">
+                    <label>{t('अवस्था', 'Status')}</label>
+                    <select className="pos-form-select" value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
+                      <option value="active">{t('सक्रिय', 'Active')}</option>
+                      <option value="inactive">{t('निष्क्रिय', 'Inactive')}</option>
+                    </select>
+                  </div>
+                )}
                 <div className="pos-input-group" style={{ gridColumn: '1/-1' }}>
                   <label>{editingUser ? t('नयाँ पासवर्ड (खाली छाड्नुस् परिवर्तन नगर्न)', 'New Password (leave blank to keep)') : t('पासवर्ड *', 'Password *')}</label>
                   <input type="password" className="pos-form-input" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} required={!editingUser} />

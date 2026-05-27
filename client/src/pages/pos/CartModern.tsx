@@ -106,10 +106,10 @@ export default function CartModern() {
       tax: parseFloat(tax.toFixed(2)),
       total: parseFloat(total.toFixed(2)),
       date: new Date().toLocaleString(),
-      cashier: typeof cashier === 'object' ? (cashier.name || cashier.username || 'Cashier') : 'Cashier',
+      cashier: typeof cashier === 'object' ? (cashier.full_name || cashier.name || cashier.username || 'Cashier') : 'Cashier',
       paymentMode,
-      customerId: selectedCustomer?._id,
-      customerName: selectedCustomer?.name,
+      customerId: selectedCustomer?.login_id || selectedCustomer?._id || selectedCustomer?.id || null,
+      customerName: selectedCustomer?.full_name || selectedCustomer?.name || null,
       customerPhone: selectedCustomer?.phone,
     };
 
@@ -279,7 +279,7 @@ export default function CartModern() {
                 {t('भुक्तानी विधि', 'Payment Method')}
               </label>
               <div className="cart-payment-modes">
-                {['Cash', 'Card', 'E-Sewa', 'Khalti'].map(mode => (
+                {['Cash', 'Card', 'E-Sewa', 'Khalti', 'QR'].map(mode => (
                   <button
                     key={mode}
                     className={`cart-payment-mode ${paymentMode === mode ? 'active' : ''}`}

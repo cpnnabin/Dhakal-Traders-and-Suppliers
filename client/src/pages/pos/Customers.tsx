@@ -86,13 +86,13 @@ export default function CustomersPage() {
   };
 
   const mergedCustomers = customers.map(c => {
-    const linked = users.find((u: any) => String(u._id) === String(c.login_id) || u.username === c.login_id || u.username === c.login_id?.toString());
+    const linked = users.find((u: any) => String(u._id) === String(c.login_id) || String(u.username || '').toLowerCase() === String(c.login_id || '').toLowerCase());
     return {
       ...c,
-      displayName: c.name || linked?.name || c.login_id || 'Customer',
+      displayName: c.full_name || c.name || linked?.full_name || linked?.name || c.login_id || 'Customer',
       displayEmail: c.email || linked?.email || '',
       displayPhone: c.phone || linked?.phone || '',
-      displayPan: c.panNo || linked?.panNo || c.panNo || ''
+      displayPan: c.pan_no || c.panNo || linked?.pan_no || linked?.panNo || ''
     };
   });
 
@@ -242,9 +242,9 @@ export default function CustomersPage() {
                 <tr key={c._id || idx}>
                   <td>
                     {isEditing ? (
-                      <input className="pos-form-input" style={{ width: 120, padding: 4 }} value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+                      <input className="pos-form-input" style={{ width: 120, padding: 4 }} value={editForm.full_name || editForm.name} onChange={e => setEditForm({ ...editForm, full_name: e.target.value, name: e.target.value })} />
                     ) : (
-                      <strong>{c.displayName || c.name}</strong>
+                      <strong>{c.displayName || c.full_name || c.name}</strong>
                     )}
                   </td>
                   <td>
@@ -291,9 +291,9 @@ export default function CustomersPage() {
                   </td>
                   <td>
                     {isEditing ? (
-                      <input className="pos-form-input" style={{ width: 100, padding: 4 }} value={editForm.panNo} onChange={e => setEditForm({ ...editForm, panNo: e.target.value })} />
+                      <input className="pos-form-input" style={{ width: 100, padding: 4 }} value={editForm.pan_no || editForm.panNo} onChange={e => setEditForm({ ...editForm, pan_no: e.target.value, panNo: e.target.value })} />
                     ) : (
-                      c.displayPan || c.panNo || '-'
+                      c.displayPan || c.pan_no || c.panNo || '-'
                     )}
                   </td>
                   <td>
@@ -354,7 +354,7 @@ export default function CustomersPage() {
 
       {/* ── Customer Account Ledger Modal ── */}
       {selectedAccountCustomer && (() => {
-        const customerSales = sales.filter(s => s.customerId === selectedAccountCustomer._id);
+        const customerSales = sales.filter(s => s.customerId === selectedAccountCustomer._id || s.customerId === selectedAccountCustomer.id);
         const totalSpent = customerSales.reduce((sum, s) => sum + s.total, 0);
         return (
           <div className="pos-modal-overlay">
@@ -362,7 +362,7 @@ export default function CustomersPage() {
               <div style={{ padding: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--pos-card-border)', paddingBottom: 10, marginBottom: 14 }}>
                   <h3 style={{ margin: 0, fontSize: 18 }}>
-                    👤 {selectedAccountCustomer.name} - {t('खाता विवरण', 'Account Ledger')}
+                    👤 {selectedAccountCustomer.full_name || selectedAccountCustomer.name} - {t('खाता विवरण', 'Account Ledger')}
                   </h3>
                   <button className="pos-table-delete" style={{ fontSize: 20 }} onClick={() => setSelectedAccountCustomer(null)}>✕</button>
                 </div>

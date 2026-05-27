@@ -74,11 +74,23 @@ export default function LedgerPage() {
     else downloadCashBookExport(cashBookFiltered, lang);
   };
 
-  function printLedger() {
+  async function printLedger() {
     const w = window.open('', '_blank');
     if (!w) return alert('Popup blocked — allow popups to print');
     const now = new Date();
     const generated = now.toLocaleString();
+
+    const escapeHtml = (value: string) => String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const companyName = lang === 'ne' ? 'ढकाल ट्रेडर्स एण्ड सप्लायर्स' : 'Dhakal Traders & Suppliers';
+    const companyLine = lang === 'ne'
+      ? 'बागचौर, सल्यान · दर्ता नं. 606002732'
+      : 'Bagchaur, Salyan · Reg No. 606002732';
 
     let heading = '';
     let rowsHtml = '';
@@ -86,12 +98,12 @@ export default function LedgerPage() {
       heading = lang === 'ne' ? 'जर्नल खाता (डेबिट / क्रेडिट)' : 'General Journal (Debit / Credit)';
       rowsHtml = journalFiltered.map(line => (
         `<tr>
-          <td>${line.date}</td>
-          <td>${line.voucherId}</td>
-          <td>${line.partyName}</td>
-          <td>${line.paymentMode || 'Cash'}</td>
-          <td>${line.accountCode}</td>
-          <td>${(line.particulars || '').replace(/</g,'&lt;')}</td>
+          <td>${escapeHtml(line.date)}</td>
+          <td>${escapeHtml(line.voucherId)}</td>
+          <td>${escapeHtml(line.partyName)}</td>
+          <td>${escapeHtml(line.paymentMode || 'Cash')}</td>
+          <td><code>${escapeHtml(line.accountCode)}</code><div class="ledger-acc-name">${escapeHtml(accountLabel(line.accountCode))}</div></td>
+          <td>${escapeHtml(line.particulars || '')}</td>
           <td style="text-align:right">${line.debit > 0 ? 'NRS ' + line.debit.toLocaleString() : '—'}</td>
           <td style="text-align:right">${line.credit > 0 ? 'NRS ' + line.credit.toLocaleString() : '—'}</td>
         </tr>`
@@ -100,11 +112,11 @@ export default function LedgerPage() {
       heading = lang === 'ne' ? 'नगद खाता — आम्दानी / खर्च' : 'Cash Book — Receipts & Payments';
       rowsHtml = cashBookFiltered.map(row => (
         `<tr>
-          <td>${row.date}</td>
-          <td>${row.ref}</td>
-          <td>${row.partyName}</td>
-          <td>${row.paymentMode || 'Cash'}</td>
-          <td>${(row.particulars || '').replace(/</g,'&lt;')}</td>
+          <td>${escapeHtml(row.date)}</td>
+          <td>${escapeHtml(row.ref)}</td>
+          <td>${escapeHtml(row.partyName)}</td>
+          <td>${escapeHtml(row.paymentMode || 'Cash')}</td>
+          <td>${escapeHtml(row.particulars || '')}</td>
           <td style="text-align:right">${row.receipt > 0 ? 'NRS ' + row.receipt.toLocaleString() : '--'}</td>
           <td style="text-align:right">${row.payment > 0 ? 'NRS ' + row.payment.toLocaleString() : '--'}</td>
           <td style="text-align:right">NRS ${row.balance.toLocaleString()}</td>
@@ -112,42 +124,69 @@ export default function LedgerPage() {
       )).join('');
     }
 
+    const totals = view === 'journal'
+      ? `<div class="report-summary"><span>Total Debits</span><strong>NRS ${journalFiltered.reduce((sum, row) => sum + row.debit, 0).toLocaleString()}</strong><span>Total Credits</span><strong>NRS ${journalFiltered.reduce((sum, row) => sum + row.credit, 0).toLocaleString()}</strong></div>`
+      : `<div class="report-summary"><span>Total Receipts</span><strong>NRS ${cashBookFiltered.reduce((sum, row) => sum + row.receipt, 0).toLocaleString()}</strong><span>Total Payments</span><strong>NRS ${cashBookFiltered.reduce((sum, row) => sum + row.payment, 0).toLocaleString()}</strong><span>Closing Balance</span><strong>NRS ${summary.closingBalance.toLocaleString()}</strong></div>`;
+
     const html = `
       <html>
       <head>
         <title>Ledger Report</title>
         <style>
-          body{font-family: Arial, Helvetica, sans-serif;padding:20px;color:#111}
-          .head{display:flex;justify-content:space-between;align-items:center}
-          .company{font-weight:700;font-size:18px}
-          .meta{font-size:12px;text-align:right}
-          table{width:100%;border-collapse:collapse;margin-top:16px}
-          th,td{padding:8px;border:1px solid #ddd;text-align:left;font-size:12px}
-          th{background:#f6f6f6}
-          .num{text-align:right}
+          @page { size: A4 portrait; margin: 12mm; }
+          html, body { margin: 0; padding: 0; background: #fff; color: #111; }
+          body { font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .report { padding: 6px; }
+          .head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 12px; }
+          .company { font-weight: 800; font-size: 18px; }
+          .company-line { font-size: 12px; margin-top: 4px; color: #444; }
+          .meta { font-size: 12px; text-align: right; line-height: 1.5; }
+          .meta strong { display: block; font-size: 14px; }
+          .report-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 13px; }
+          .report-summary span { color: #64748b; }
+          .report-summary strong { text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+          thead { display: table-header-group; }
+          th, td { padding: 8px 10px; border: 1px solid #d1d5db; text-align: left; font-size: 12px; vertical-align: top; }
+          th { background: #f3f4f6; font-weight: 700; }
+          tbody tr:nth-child(even) { background: #fafafa; }
+          .num { text-align: right; }
+          code { font-size: 11px; }
+          .ledger-acc-name { font-size: 11px; color: #6b7280; margin-top: 3px; }
+          .print-footer { margin-top: 14px; font-size: 11px; color: #6b7280; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+          .no-print { display: none !important; }
         </style>
       </head>
       <body>
-        <div class="head">
-          <div>
-            <div class="company">Dhakal Traders & Suppliers</div>
-            <div>Phone: 986... · Dhapakhel Lalitpur</div>
-            <div>Reg No: 606002732</div>
+        <div class="report">
+          <div class="head">
+            <div>
+              <div class="company">${companyName}</div>
+              <div class="company-line">${companyLine}</div>
+            </div>
+            <div class="meta">
+              <strong>${escapeHtml(heading)}</strong>
+              <div>${escapeHtml(lang === 'ne' ? 'प्रिन्ट मिति' : 'Printed on')}: ${escapeHtml(generated)}</div>
+              <div>${escapeHtml(lang === 'ne' ? 'फिल्टर' : 'Filter')}: ${escapeHtml(filter === 'all' ? (lang === 'ne' ? 'सबै' : 'All') : filter)}</div>
+            </div>
           </div>
-          <div class="meta">
-            <div>${heading}</div>
-            <div>Report Generated on: ${generated}</div>
-          </div>
-        </div>
-        <div style="margin-top:12px;font-size:13px;">
+
+          ${totals}
+
+          <div style="margin-top:12px;font-size:13px;">
           <table>
             <thead>
-              ${view === 'journal' ? '<tr><th>Date</th><th>Voucher</th><th>Party</th><th>Mode</th><th>Account</th><th>Particulars</th><th>Debit</th><th>Credit</th></tr>' : '<tr><th>Date</th><th>Ref</th><th>Party</th><th>Mode</th><th>Particulars</th><th>Receipt</th><th>Payment</th><th>Running Balance</th></tr>'}
+              ${view === 'journal' ? '<tr><th>Date</th><th>Voucher</th><th>Party</th><th>Mode</th><th>Account</th><th>Particulars</th><th class="num">Debit</th><th class="num">Credit</th></tr>' : '<tr><th>Date</th><th>Ref</th><th>Party</th><th>Mode</th><th>Particulars</th><th class="num">Receipt</th><th class="num">Payment</th><th class="num">Running Balance</th></tr>'}
             </thead>
             <tbody>
               ${rowsHtml}
             </tbody>
           </table>
+        </div>
+          <div class="print-footer">
+            <span>${escapeHtml(lang === 'ne' ? 'सही लेखा अभिलेखका लागि यो रिपोर्ट स्वचालित रूपमा तयार गरिएको हो।' : 'This report was generated automatically from the accounting ledger.')}</span>
+            <span>${escapeHtml(lang === 'ne' ? 'पृष्ठ' : 'Page')} 1</span>
+          </div>
         </div>
       </body>
       </html>
@@ -166,29 +205,14 @@ export default function LedgerPage() {
         }
       };
 
-      // If the document is already complete, print immediately
-      const doc = w.document;
-      if (doc && doc.readyState === 'complete') {
-        doPrint();
-        return;
-      }
-
-      // Listen for DOMContentLoaded
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       try {
-        doc.addEventListener && doc.addEventListener('DOMContentLoaded', () => doPrint(), { once: true });
-      } catch (e) {
-        // ignore
-      }
+        if ((w.document as any).fonts?.ready) await (w.document as any).fonts.ready;
+      } catch (e) {}
+      doPrint();
 
-      // Listen for window load as well
-      try {
-        w.addEventListener && w.addEventListener('load', () => doPrint(), { once: true });
-      } catch (e) {
-        // ignore
-      }
-
-      // Final fallback after 1s
-      setTimeout(() => doPrint(), 1000);
+      // Final fallback after a short delay if the first attempt is interrupted.
+      setTimeout(() => doPrint(), 800);
     } catch (err) {
       setTimeout(() => { try { if (!w.closed) { w.focus(); w.print(); } } catch (_) {} }, 1200);
     }
