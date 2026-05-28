@@ -1,116 +1,5 @@
 // client/functions/api/sales.js
-// ─── Cloudflare Pages Function: POS Sales (Orders) D1 Management ──────────────
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-pos-token',
-  'cache-control': 'no-store',
-};
-
-const json = (data, status = 200) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', ...CORS },
-  });
-
-async function ensureSalesTable(db) {
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS sales (
-      id                          TEXT PRIMARY KEY,
-      items                       TEXT NOT NULL,
-      subtotal                    REAL NOT NULL,
-      discount                    REAL NOT NULL,
-      tax                         REAL NOT NULL,
-      total                       REAL NOT NULL,
-      date                        TEXT NOT NULL,
-      cashier                     TEXT NOT NULL,
-      customerId                  TEXT,
-      paymentMode                 TEXT DEFAULT 'Cash',
-      customerName                TEXT,
-      customerAddress             TEXT,
-      customerPan                 TEXT,
-      customerAlternativeAddress  TEXT,
-      customerAlternativePhone    TEXT,
-      created_at                  TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `).run();
-
-  const tableInfo = await db.prepare('PRAGMA table_info(sales)').all();
-  const columns = new Set((tableInfo?.results ?? []).map((c) => c.name));
-  if (!columns.has('customerName')) {
-    await db.prepare("ALTER TABLE sales ADD COLUMN customerName TEXT").run();
-  }
-  if (!columns.has('customerAddress')) {
-    await db.prepare("ALTER TABLE sales ADD COLUMN customerAddress TEXT").run();
-  }
-  if (!columns.has('customerPan')) {
-    await db.prepare("ALTER TABLE sales ADD COLUMN customerPan TEXT").run();
-  }
-  if (!columns.has('customerAlternativeAddress')) {
-    await db.prepare("ALTER TABLE sales ADD COLUMN customerAlternativeAddress TEXT").run();
-  }
-  if (!columns.has('customerAlternativePhone')) {
-    await db.prepare("ALTER TABLE sales ADD COLUMN customerAlternativePhone TEXT").run();
-  }
-  if (!columns.has('customerEmail')) {
-    await db.prepare('ALTER TABLE sales ADD COLUMN customerEmail TEXT').run();
-  }
-  if (!columns.has('customerPhone')) {
-    await db.prepare('ALTER TABLE sales ADD COLUMN customerPhone TEXT').run();
-  }
-  if (!columns.has('customerLoginId')) {
-    await db.prepare('ALTER TABLE sales ADD COLUMN customerLoginId TEXT').run();
-  }
-}
-
-export const onRequestOptions = async () =>
-  new Response(null, { status: 204, headers: CORS });
-
-// GET /api/sales
-export async function onRequestGet({ env }) {
-  if (!env.DB) return json({ success: false, error: 'D1 database binding missing.' }, 500);
-
-  try {
-    await ensureSalesTable(env.DB);
-    const { results } = await env.DB.prepare('SELECT * FROM sales ORDER BY created_at DESC').all();
-    
-    // Map items column back to JS Array
-    const sales = results.map(s => ({
-      ...s,
-      items: JSON.parse(s.items)
-    }));
-
-    return json({ success: true, sales });
-  } catch (err) {
-    return json({ success: false, error: err.message }, 500);
-  }
-}
-
-// POST /api/sales
-export async function onRequestPost({ request, env }) {
-  if (!env.DB) return json({ success: false, error: 'D1 database binding missing.' }, 500);
-
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ success: false, error: 'Invalid JSON body.' }, 400);
-  }
-
-  const { 
-    id, items, subtotal, discount, tax, total, date, cashier, customerId, paymentMode,
-    customerName, customerPhone, customerEmail, customerLoginId, customerAddress, customerPan,
-    customerAlternativeAddress, customerAlternativePhone
-  } = body;
-
-  if (!id || !items || subtotal === undefined || total === undefined || !date || !cashier) {
-    return json({ success: false, error: 'Required fields missing.' }, 400);
-  }
-
-  try {
-    await ensureSalesTable(env.DB);
-// Cloudflare Pages Function: POS Sales D1 Management
+// ─── Cloudflare Pages Function: POS Sales D1 Management ──────────────────────
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -296,7 +185,7 @@ export async function onRequestPost({ request, env }) {
 
     const cashierRow = await env.DB.prepare('SELECT id, full_name FROM login WHERE LOWER(email) = LOWER(?1) OR LOWER(username) = LOWER(?1) OR LOWER(full_name) = LOWER(?1) ORDER BY id DESC').bind(String(cashier).trim()).first();
 
-    const inserted = await env.DB.prepare(`
+    await env.DB.prepare(`
       INSERT INTO sales (
         invoice_no, customer_id, login_id, warehouse_id, bill_date, miti, payment_mode,
         gross_amount, discount_amount, taxable_amount, vat_amount, net_amount, paid_amount,
@@ -361,4 +250,3 @@ export async function onRequestPost({ request, env }) {
     return json({ success: false, error: err.message }, 500);
   }
 }
-            await env.DB.prepare(`

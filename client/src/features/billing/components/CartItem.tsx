@@ -35,19 +35,8 @@ export default function CartItem({ item, onQtyChange, onDiscountChange, onRemove
 
   const subtotal = (item.qty * item.rate * (1 - (item.discount ?? 0) / 100)).toFixed(2);
 
-  // Updated CartItem with image wrapper
-return (
-  <div className="cart-item">
-    {/* Image wrapper */}
-    <div className="img-wrapper">
-      {item.image ? (
-        <img
-          loading="lazy"
-          src={item.image}
-          alt={item.name}
   return (
     <div className="cart-item">
-      {/* Image wrapper */}
       <div className="img-wrapper">
         {item.image ? (
           <img

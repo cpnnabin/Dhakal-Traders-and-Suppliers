@@ -1,4 +1,7 @@
 
+export const COMPONENT_NAME = "Dhakal Traders POS";
+
+export const COMPANY = {
   name: "Dhakal Traders",
   address: "Kathmandu, Nepal",
   phone: "980-XXXXXXX",
@@ -7,17 +10,18 @@
 };
 
 /** Convert Gregorian Date to Nepali Bikram Sambat (BS) format DD/MM/YYYY */
-export function toMiti(date: Date): string {
+export function toMiti(date: Date | string | number): string {
   // Simple placeholder conversion – replace with proper Nepali date library if available
   // Using Intl for demonstration; real implementation would use a Nepali calendar package.
   const options: Intl.DateTimeFormatOptions = { year: "numeric", month: "2-digit", day: "2-digit" };
-  const formatted = new Intl.DateTimeFormat("en-GB", options).format(date);
+  const safeDate = date instanceof Date ? date : new Date(date);
+  const formatted = new Intl.DateTimeFormat("en-GB", options).format(safeDate);
   // Pretend the BS date is the same as Gregorian for now.
   return formatted;
 }
 
 /** Convert a number to words, prefix with Rs. and suffix "only" */
-(n: number): string {
+export function amountToWords(n: number): string {
   if (n === 0) return "Rs. Zero only";
   const ones = ["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
   const tens = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
@@ -28,7 +32,7 @@ export function toMiti(date: Date): string {
     if (num < 1000000) return toWords(Math.floor(num / 1000)) + " Thousand" + (num % 1000 ? " " + toWords(num % 1000) : "");
     return num.toString();
   };
-  return `Rs. ${toWords(n)} only`;
+  return `${toWords(n)}`;
 }
 
 /** Generate a preview bill number based on current date and a counter stored in localStorage */

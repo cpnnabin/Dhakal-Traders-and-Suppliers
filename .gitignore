@@ -1,86 +1,57 @@
-# Dependencies
+### Dependencies
 node_modules/
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+client/node_modules/
+server/node_modules/
 
-# Build outputs
+### Builds / bundles
 dist/
+client/dist/
 build/
+coverage/
+htmlcov/
+
+### Package manager / tool caches
+.wrangler/
+.vite/
+.turbo/
+.cache/
+.eslintcache
 *.tsbuildinfo
 
-# Project-specific build
-client/dist/
-client/build/
-server/dist/
-
-# Environment variables
+### Environment files
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.example.*
 
-# common local secrets
-.secrets.local
-.env.test
-.env.production.local
+### Local Python environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
-# OS files
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
+### Local databases
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
 
-# Windows thumbnail cache
-ehthumbs.db
-
-# IDE files
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# IntelliJ project files
-*.iml
-
-# Logs
+### Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# General logs
-*.log
-
-# Wrangler/Cloudflare
-.wrangler/
-wrangler-cache/
-
-# Temporary files
-*.tmp
-.cache/
-
-# temp and backup
-.temp/
-*.bak
-
-# Vite cache
-.vite/
-.vite/deps
-node_modules/.vite
-
-# Coverage
-coverage/
-.nyc_output/
-
-# Database/local
-*.sqlite
-*.sqlite3
-db/*.db
-db/*.sqlite
-
-# Deployment/platform artifacts
-.vercel/
-.netlify/
-.firebase/
-.serverless/
-.now/
+### OS / editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/

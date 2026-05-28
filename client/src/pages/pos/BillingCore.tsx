@@ -6,7 +6,8 @@ import CheckoutPage from '../../features/sales/pos/CheckoutPage';
 import { isStaffRole } from '../../features/sales/pos/posWorkflow';
 import ImageUpload from '../../components/ImageUpload';
 import type { InvoiceStatus } from '../../components/InvoiceModern';
-import logoImg from '../../image/Dhakal Traders Logo .png';
+// avoid bundling the full logo; use public favicon instead
+const logoImg = '/favicon.svg';
 import { resolveProductImageUrl } from '../../utils/productImage';
 const InvoiceModern = React.lazy(() => import('../../components/InvoiceModern'));
 const CheckoutPageAny = CheckoutPage as React.ComponentType<any>;

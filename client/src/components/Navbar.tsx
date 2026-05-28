@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../LanguageContext';
+// Import bundled asset logo (used when present in src/assets)
+import dhakalAsset from '../assets/DhakalTraders Logo.png';
 
 type ChildLink = {
   href: string;
@@ -14,6 +16,7 @@ type SectionLink = {
 };
 
 const sections: SectionLink[] = [
+  
   {
     key: 'about',
     href: '#about',
@@ -49,17 +52,6 @@ const sections: SectionLink[] = [
     ],
   },
   {
-    key: 'admin-chats',
-    href: '#admin-chats',
-    label: { ne: 'एडमिन च्याट', en: 'Admin Chats' },
-    children: [
-      { href: '#admin-support', label: { ne: 'ग्राहक सहयोग', en: 'Customer Support' } },
-      { href: '#live-chat', label: { ne: 'लाइभ च्याट', en: 'Live Chat' } },
-      { href: '#order-inquiry', label: { ne: 'अर्डर सोधपुछ', en: 'Order Inquiry' } },
-      { href: '#help-center', label: { ne: 'सहायता केन्द्र', en: 'Help Center' } },
-    ],
-  },
-  {
     key: 'products',
     href: '#products',
     label: { ne: 'उत्पादनहरू', en: 'Products' },
@@ -84,17 +76,6 @@ const sections: SectionLink[] = [
     ],
   },
   {
-    key: 'location',
-    href: '#location',
-    label: { ne: 'स्थान', en: 'Location' },
-    children: [
-      { href: '#map', label: { ne: 'Google Map', en: 'Google Map' } },
-      { href: '#branches', label: { ne: 'शाखाहरू', en: 'Branches' } },
-      { href: '#delivery-areas', label: { ne: 'डेलिभरी क्षेत्र', en: 'Delivery Areas' } },
-      { href: '#contact-details', label: { ne: 'सम्पर्क विवरण', en: 'Contact Details' } },
-    ],
-  },
-  {
     key: 'contact',
     href: '#contact',
     label: { ne: 'सम्पर्क', en: 'Contact' },
@@ -103,9 +84,39 @@ const sections: SectionLink[] = [
       { href: '#phone', label: { ne: 'फोन नम्बर', en: 'Phone Numbers' } },
       { href: '#email', label: { ne: 'इमेल', en: 'Email' } },
       { href: '#social', label: { ne: 'सामाजिक सञ्जाल', en: 'Social Media' } },
+      // merged from Location
+      { href: '#map', label: { ne: 'Google Map', en: 'Google Map' } },
+      { href: '#branches', label: { ne: 'शाखाहरू', en: 'Branches' } },
+      { href: '#delivery-areas', label: { ne: 'डेलिभरी क्षेत्र', en: 'Delivery Areas' } },
+      { href: '#contact-details', label: { ne: 'सम्पर्क विवरण', en: 'Contact Details' } },
     ],
   },
 ];
+
+// Logo helper: tries several filenames in public/ then falls back to /favicon.svg
+const Logo: React.FC = () => {
+  const candidates = [
+    dhakalAsset,
+    '/company-logo.png',
+    '/DhakalTraders Logo.png',
+    '/DhakalTradersLogo.png',
+    // Try server proxy to MinIO (server provides /api/product-image)
+    '/api/product-image?bucket=images&name=logo.png',
+    '/api/product-image?bucket=images&name=DhakalTraders%20Logo.png',
+    '/api/product-image?bucket=images&name=DhakalTradersLogo.png',
+    '/favicon.svg',
+  ];
+  const [idx, setIdx] = useState(0);
+  return (
+    <img
+      src={candidates[idx]}
+      alt="Dhakal Traders logo"
+      className="nav-logo-icon"
+      style={{ width: 36, height: 36, objectFit: 'contain' }}
+      onError={() => setIdx((i) => Math.min(i + 1, candidates.length - 1))}
+    />
+  );
+};
 
 const Navbar: React.FC = () => {
   const { lang, setLang } = useLanguage();
@@ -141,7 +152,8 @@ const Navbar: React.FC = () => {
     <nav className="navbar" ref={navRef}>
       <div className="nav-logo">
         <a href="#home" style={{ display: 'flex', alignItems: 'center', gap: '.45rem', textDecoration: 'none', color: 'inherit' }}>
-          <span className="nav-logo-icon" role="img" aria-label="store">🏪</span>
+          {/* Try multiple repo-provided filenames, fall back to /favicon.svg */}
+          <Logo />
           <span className="nav-brand" data-ne="ढकाल ट्रेडर्स" data-en="Dhakal Traders">
             {lang === 'ne' ? 'ढकाल ट्रेडर्स' : 'Dhakal Traders'}
           </span>

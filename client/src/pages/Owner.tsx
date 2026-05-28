@@ -2,9 +2,21 @@ import { useEffect, useState, useRef } from 'react';
 import { useLanguage } from '../LanguageContext';
 import { useReveal } from '../hooks/useReveal';
 import CopyableContact from '../components/CopyableContact';
-import ownerPhoto from '../image/Dipak Sharma.jpg';
 import ProtectedImage from '../components/ProtectedImage';
 import { ownerProfile, leadershipItems, exploreLinks, getOwnerContactDetails } from '../data/ownerData';
+
+const FALLBACK_AVATAR =
+  'data:image/svg+xml;charset=UTF-8,' +
+  encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="64" fill="#111827"/>
+      <circle cx="256" cy="192" r="88" fill="#f3f4f6"/>
+      <path d="M96 432c22-86 90-128 160-128s138 42 160 128" fill="#f3f4f6"/>
+      <text x="256" y="286" text-anchor="middle" font-size="56" font-family="Arial, sans-serif" fill="#111827">DS</text>
+    </svg>
+  `);
+
+const isPublicUrl = (value: string | undefined) => !!value && !/^https?:\/\/(127\.0\.0.1|localhost)(:\d+)?/i.test(value);
 
 const Owner = () => {
   const { lang } = useLanguage();
@@ -62,7 +74,7 @@ const Owner = () => {
   };
   const t = (ne: string, en: string) => (lang === 'en' ? en : ne);
   const contactDetails = getOwnerContactDetails();
-  const photoSrc = (ownerProfile.contact as any).profilePhoto || ownerPhoto;
+  const photoSrc = isPublicUrl((ownerProfile.contact as any).profilePhoto) ? (ownerProfile.contact as any).profilePhoto : FALLBACK_AVATAR;
 
   useEffect(() => {
     document.body.style.overflow = photoOpen ? 'hidden' : '';

@@ -18,7 +18,8 @@ import OrdersPage       from './pos/Orders';
 import AdminChatsPage   from './pos/AdminChats';
 import CustomerChatsPage from './pos/CustomerChats';
 import ReceiptModal     from './pos/ReceiptModal';
-import logoImg          from '../image/Dhakal Traders Logo .png';
+// use public favicon to avoid bundling large logo
+const logoImg = '/favicon.svg';
 import { connectWithToken, joinRoom } from '../sockets/socket';
 import NotificationsCenter from '../components/NotificationsCenter';
 import { useLanguage }  from '../LanguageContext';

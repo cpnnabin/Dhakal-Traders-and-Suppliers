@@ -1,23 +1,25 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { LanguageProvider, useLanguage } from './LanguageContext';
 import About from './pages/About';
 import Owner from './pages/Owner';
 import Products from './pages/Products';
 import Services from './pages/Services';
-import ProductPage from './pages/ProductPage';
-import NotFound from './pages/NotFound';
-import Gallery from './pages/Gallery';
 import Location from './pages/Location';
 import Contact from './pages/Contact';
 import Footer from './pages/Footer';
-import ResponsePage from './pages/Response';
-import POSDashboard from './pages/POSDashboard';
-import POSLogin, { getPOSSession, clearPOSSession } from './pages/POSLogin';
-import Shop from './pages/Shop';
-import ChatWidget from './pages/ChatWidget';
 import PublicNavbar from './components/Navbar';
+import ChatWidget from './pages/ChatWidget';
+import { getPOSSession, clearPOSSession } from './pages/POSLogin';
+import POSDashboard from './pages/POSDashboard';
+import POSLogin from './pages/POSLogin';
 import InventoryHub from './features/inventory/InventoryHub';
-import dhakalLogo from './image/Dhakal Traders Logo .png';
+import ResponsePage from './pages/Response';
+import Gallery from './pages/Gallery';
+import NotFound from './pages/NotFound';
+import ProductPage from './pages/ProductPage';
+import Shop from './pages/Shop';
+// Use public favicon instead of bundling large logo image
+const dhakalLogo = '/favicon.svg';
 
 function AppContent() {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -59,7 +61,6 @@ function AppContent() {
     
     // Add admin chat view
     if (lowerH === '#admin-chats' || lowerH === '#adminchats') return 'admin-chats';
-    // Inventory admin views
     if (lowerH.startsWith('#inventory-products') || lowerH.startsWith('#inventory-stock') || lowerH.startsWith('#inventory-low') || lowerH === '#inventory') {
       if (lowerH.startsWith('#inventory-products')) return 'inventory-products';
       if (lowerH.startsWith('#inventory-stock')) return 'inventory-stock';

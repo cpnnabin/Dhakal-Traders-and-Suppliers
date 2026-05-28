@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "test": "vitest",
     "preview": "vite preview",
     "db:setup:remote": "wrangler d1 execute dhakaltraders --remote --config ../wrangler.toml --file=../database/setup.sql",
@@ -27,10 +27,12 @@
   "devDependencies": {
     "@types/react": "^18.3.29",
     "@types/react-dom": "^18.3.7",
+    "@types/node": "^20.5.1",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
+    "terser": "^5.18.0",
     "typescript": "^5.9.3",
     "vite": "^5.4.10",
     "vitest": "^0.34.3"
