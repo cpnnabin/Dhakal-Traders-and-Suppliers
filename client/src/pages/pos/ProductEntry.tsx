@@ -1,13 +1,17 @@
 // ─── POS Page: Product Entry + Stock/Expiry (Combined) ───────────────────────
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { usePOS } from './POSContext';
 import { Product } from './posTypes';
 import ImageUpload from '../../components/ImageUpload';
+import { resolveProductImageUrl } from '../../utils/productImage';
 
 const EMOJIS = ['📦','🌿','🫚','🌾','🥫','🌻','🍃','🧂','🫙','🫛','🍵','🥜','🧴','🌶️','🫑'];
 
 export default function ProductEntryPage() {
-  const { products, setProducts, apiCall, t } = usePOS();
+  const { products, setProducts, apiCall, t, reloadProducts } = usePOS();
+  const uploadRef = useRef<any>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadProgress, setUploadProgress] = React.useState(0);
 
   const [tab, setTab] = useState<'add' | 'list'>('list');
   const [search, setSearch] = useState('');
@@ -43,6 +47,16 @@ export default function ProductEntryPage() {
     e.preventDefault();
     if (!nameEn.trim() || !nameNe.trim()) { alert(t('कृपया नाम भर्नुहोस्!', 'Please fill in both product names!')); return; }
     setSaving(true);
+    // If user selected a file in the ImageUpload but didn't click Upload, try to upload now
+    try {
+      if (!imageUrl && uploadRef.current && typeof uploadRef.current.upload === 'function') {
+        // wait for any in-progress upload to finish (ImageUpload.auto-upload may be running)
+        const uploaded = await uploadRef.current.upload();
+        if (uploaded) setImageUrl(uploaded);
+      }
+    } catch (err) {
+      console.warn('Image auto-upload failed', err);
+    }
     const next: Product = {
       id: id.trim() || editingId || String(1001 + products.length),
       nameEn: nameEn.trim(), nameNe: nameNe.trim(),
@@ -62,6 +76,8 @@ export default function ProductEntryPage() {
     alert(t('उत्पादन सुरक्षित गरियो!', 'Product saved!'));
     resetForm();
     setTab('list');
+    // Ensure canonical server data is loaded (in case other clients modified DB)
+    try { reloadProducts(); } catch (e) { /* ignore */ }
   };
 
   const resetForm = () => {
@@ -155,9 +171,26 @@ export default function ProductEntryPage() {
                   const days = expiryDays(p.expiryDate || '');
                   const stockStatus = p.stock <= 0 ? 'out' : p.stock < 50 ? 'low' : 'ok';
                   const margin = p.sellingPrice > 0 ? ((p.sellingPrice - p.purchasePrice) / p.sellingPrice * 100).toFixed(0) : '0';
+                  const thumb = resolveProductImageUrl(p.imageUrl || p.image || '');
                   return (
                     <tr key={p.id} className={`pe-row pe-row--${stockStatus}`}>
-                      <td className="pe-emoji">{p.emoji}</td>
+                      <td className="pe-emoji">
+                        {thumb ? (
+                          <img
+                            src={thumb}
+                            alt={p.nameEn}
+                            style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: 8, display: 'block' }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                              if (fallback) fallback.style.display = 'inline-flex';
+                            }}
+                          />
+                        ) : null}
+                        <span style={{ display: thumb ? 'none' : 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {p.emoji}
+                        </span>
+                      </td>
                       <td>
                         <div className="pe-product-name">
                           <strong>{t(p.nameNe, p.nameEn)}</strong>
@@ -299,18 +332,20 @@ export default function ProductEntryPage() {
             </div>
 
             <div style={{ marginTop: 12 }}>
-              <ImageUpload
+                <ImageUpload
                 title={t('उत्पादन फोटो', 'Product Image')}
                 initialImageUrl={imageUrl || ''}
                 buttonLabel={t('फोटो अपलोड', 'Upload Product Image')}
                 onUploaded={(url) => setImageUrl(url)}
+                ref={uploadRef}
+                onUploadingChange={(is, prog) => { setUploading(is); setUploadProgress(prog || 0); }}
               />
             </div>
 
             <div className="form-actions">
               <button type="button" className="pos-sec-btn" onClick={() => { resetForm(); setTab('list'); }}>{t('रद्द', 'Cancel')}</button>
-              <button type="submit" className="pos-form-submit" disabled={saving}>
-                <i className="ri-save-line" /> {saving ? t('सुरक्षित हुँदैछ...', 'Saving...') : t('सुरक्षित गर्नुहोस्', 'Save Product')}
+              <button type="submit" className="pos-form-submit" disabled={saving || uploading}>
+                <i className="ri-save-line" /> {saving ? t('सुरक्षित हुँदैछ...', 'Saving...') : uploading ? `${t('अपलोड हुँदैछ', 'Uploading')} ${uploadProgress}%` : t('सुरक्षित गर्नुहोस्', 'Save Product')}
               </button>
             </div>
           </form>

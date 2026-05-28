@@ -9,12 +9,16 @@ export default function ProductForm({ product, onSaved, onCancel }:
 
   const save = async () => {
     if (!form.name.trim()) return alert('Provide name');
-    if (product) {
-      await inventoryService.updateProduct(product.id, form);
-    } else {
-      await inventoryService.createProduct(form);
+    try {
+      if (product) {
+        await inventoryService.updateProduct(product.id, form);
+      } else {
+        await inventoryService.createProduct(form);
+      }
+      onSaved();
+    } catch (err: any) {
+      alert(err?.message || 'Unable to save product');
     }
-    onSaved();
   };
 
   return (

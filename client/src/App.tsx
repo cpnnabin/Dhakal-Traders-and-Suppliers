@@ -134,6 +134,13 @@ function AppContent() {
             setPosCashier(cashier);
             setPosRole(role);
             setPosAuthed(true);
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.set('tab', 'dashboard');
+              url.searchParams.delete('customerId');
+              const next = `${url.pathname}${url.search}`;
+              window.history.replaceState({}, '', next);
+            } catch {}
           }}
         />
       );

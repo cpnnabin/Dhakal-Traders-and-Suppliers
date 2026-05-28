@@ -25,9 +25,13 @@ export default function StockList() {
     if (!form.qty || Number(form.qty) <= 0) return alert('Provide qty');
     const id = `SE-${Date.now()}`;
     const entry: StockEntry = { id, productId: String(form.productId), qty: Number(form.qty), type: (form.type as 'in'|'out') || 'in', date: form.date || new Date().toISOString(), warehouseId: form.warehouseId, note: form.note };
-    await inventoryService.createStock(entry);
-    setForm({ type: 'in', qty: 1, date: new Date().toISOString().slice(0,10) });
-    await load();
+    try {
+      await inventoryService.createStock(entry);
+      setForm({ type: 'in', qty: 1, date: new Date().toISOString().slice(0,10) });
+      await load();
+    } catch (err: any) {
+      alert(err?.message || 'Unable to save stock entry');
+    }
   };
 
   return (
@@ -73,8 +77,12 @@ export default function StockList() {
               <div style={{ gridColumn: '1/-1' }}>
                 <button className="pos-sec-btn" onClick={async () => {
                   if (!form.productId) return alert('Select product');
-                  const rows = await inventoryService.listWarehouseStock(String(form.productId));
-                  setWarehouseLevels(rows || []);
+                  try {
+                    const rows = await inventoryService.listWarehouseStock(String(form.productId));
+                    setWarehouseLevels(rows || []);
+                  } catch (err: any) {
+                    alert(err?.message || 'Unable to load warehouse levels');
+                  }
                 }}>Show warehouse levels for selected product</button>
               </div>
               <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

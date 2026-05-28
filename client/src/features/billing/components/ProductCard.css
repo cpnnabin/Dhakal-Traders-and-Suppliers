@@ -1,0 +1,125 @@
+/* src/features/billing/components/ProductCard.css */
+
+.product-card {
+  position: relative;
+  background: var(--bg-elevated);
+  border-radius: 0.5rem;
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  transition: background 0.2s ease;
+}
+
+.product-card:hover {
+  background: var(--bg-hover);
+}
+
+/* Shortcut badge (1‑9) */
+.shortcut-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0,0,0,0.6);
+  color: #f5a623;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Stock badge */
+.stock-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.stock-badge.out-of-stock {
+  background: #2d1a1a;
+  color: #f85149;
+}
+.stock-badge.low-stock {
+  background: #2a1f0a;
+  color: #f5a623;
+}
+
+/* Image area */
+.product-card img,
+.product-card .img-fallback {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 0.4rem;
+  margin: 0 auto;
+  display: block;
+  background: rgba(22,27,34,0.6);
+  backdrop-filter: blur(6px);
+  color: #6e7681;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 80px;
+}
+
+.card-body {
+  text-align: center;
+}
+.product-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.price {
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-top: 0.2rem;
+}
+
+.add-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
+.add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  justify-content: center;
+  margin-top: 0.4rem;
+}
+.qty-controls button {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.qty-controls .qty {
+  min-width: 20px;
+  text-align: center;
+}
+
+/* In‑cart visual cue */
+.product-card.in-cart {
+  border: 2px solid var(--success);
+}

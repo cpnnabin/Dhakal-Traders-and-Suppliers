@@ -70,7 +70,7 @@ export default function POSLogin({ onAuthenticated }: Props) {
             const resolvedRole = data.role || role;
             const resolvedUsername = data.email || username || '';
             savePOSSession(token, resolvedCashier, resolvedRole, resolvedUsername);
-            onAuthenticated(resolvedCashier, resolvedRole);
+            onAuthenticated(resolvedCashier, resolvedRole || role);
           }
           else clearPOSSession();
         })

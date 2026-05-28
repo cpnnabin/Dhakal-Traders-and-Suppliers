@@ -37,7 +37,15 @@ export default function InventoryDashboard() {
         <a href="#inventory-categories" style={{ marginLeft: 12, marginRight: 8 }}>Categories</a>
         <a href="#inventory-brands" style={{ marginRight: 8 }}>Brands</a>
         <a href="#inventory-warehouses" style={{ marginRight: 8 }}>Warehouses</a>
-        <button style={{ marginLeft: 12 }} onClick={async () => { const ok = await inventoryService.seedInventory(); if (ok) window.alert('Seeded demo data'); else window.alert('Seed failed or unauthorized'); }}>Quick Seed</button>
+        <button style={{ marginLeft: 12 }} onClick={async () => {
+          try {
+            const ok = await inventoryService.seedInventory();
+            if (ok) window.alert('Seeded demo data');
+            else window.alert('Seed failed or unauthorized');
+          } catch (err: any) {
+            window.alert(err?.message || 'Seed failed or unauthorized');
+          }
+        }}>Quick Seed</button>
       </div>
     </div>
   );

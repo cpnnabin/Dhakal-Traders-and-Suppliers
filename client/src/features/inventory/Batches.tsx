@@ -13,16 +13,24 @@ export default function Batches() {
 
   const add = async () => {
     if (!id.trim() || !productId.trim()) return;
-    const b = await inventoryService.createBatch({ id: id.trim(), productId: productId.trim(), batch_no: batchNo.trim(), qty: Number(qty), expiry_date: expiry || null });
-    setBatches((s)=>[b,...s]); setId(''); setBatchNo(''); setQty(0); setExpiry('');
+    try {
+      const b = await inventoryService.createBatch({ id: id.trim(), productId: productId.trim(), batch_no: batchNo.trim(), qty: Number(qty), expiry_date: expiry || null });
+      setBatches((s)=>[b,...s]); setId(''); setBatchNo(''); setQty(0); setExpiry('');
+    } catch (err: any) {
+      window.alert(err?.message || 'Unable to add batch');
+    }
   };
 
   const runCheck = async () => {
-    const rows = await inventoryService.checkExpiry(30);
-    if (rows && rows.length) {
-      window.alert(`Found ${rows.length} expiring batches`);
-    } else {
-      window.alert('No expiring batches found');
+    try {
+      const rows = await inventoryService.checkExpiry(30);
+      if (rows && rows.length) {
+        window.alert(`Found ${rows.length} expiring batches`);
+      } else {
+        window.alert('No expiring batches found');
+      }
+    } catch (err: any) {
+      window.alert(err?.message || 'Unable to check expiry');
     }
   };
 

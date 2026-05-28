@@ -141,7 +141,7 @@ export default function CustomerChats() {
   const filteredProductsForChat = products.filter(p => {
     const q = productSearch.toLowerCase();
     return p.stock > 0 && (!q || p.nameEn.toLowerCase().includes(q) || p.nameNe.includes(q));
-  }).slice(0, 12);
+  });
 
   return (
     <div className="customer-chat-container">

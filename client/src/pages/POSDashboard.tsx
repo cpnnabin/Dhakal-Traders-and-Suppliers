@@ -22,7 +22,7 @@ import logoImg          from '../image/Dhakal Traders Logo .png';
 import { connectWithToken, joinRoom } from '../sockets/socket';
 import NotificationsCenter from '../components/NotificationsCenter';
 import { useLanguage }  from '../LanguageContext';
-import { getVisiblePosTabs, POS_NAV_ITEMS, POS_TAB_TITLES, POS_TAB_TITLES_SHORT, type POSTab } from '../features/sales/pos/posWorkflow';
+import { getDefaultPosTab, getVisiblePosTabs, POS_NAV_ITEMS, POS_TAB_TITLES, POS_TAB_TITLES_SHORT, type POSTab } from '../features/sales/pos/posWorkflow';
 
 interface Props { onLogout: () => void; }
 
@@ -30,10 +30,7 @@ function POSShell({ onLogout }: Props) {
   const { lang, setLang } = useLanguage();
   const { t, cashier, users, apiCall, setCashier, setUsers, setSales, setReceiptData } = usePOS();
   const [tab,       setTab]       = useState<POSTab>(() => {
-    const role = getPOSSession().role;
-    if (role === 'admin') return 'reports';
-    if (role === 'customer') return 'orders';
-    return 'billing';
+    return getDefaultPosTab(getPOSSession().role || 'owner');
   });
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -244,12 +241,17 @@ function POSShell({ onLogout }: Props) {
       const url = new URL(window.location.href);
       const customerId = url.searchParams.get('customerId');
       const tabParam = url.searchParams.get('tab');
+      const role = getPOSSession().role || 'owner';
+      const visible = getVisiblePosTabs(role);
 
-      if (tabParam && ['dashboard', 'billing', 'entry', 'purchase', 'stock', 'reports', 'ledger', 'users', 'customers', 'orders', 'chats'].includes(tabParam)) {
-        setTab(tabParam as POSTab);
+      if (customerId && visible.includes('billing')) {
+        setTab('billing');
+        return;
       }
 
-      if (customerId) setTab('billing');
+      if (tabParam && visible.includes(tabParam as POSTab)) {
+        setTab(tabParam as POSTab);
+      }
     } catch {}
   }, []);
 

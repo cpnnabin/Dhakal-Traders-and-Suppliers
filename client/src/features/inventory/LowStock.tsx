@@ -20,8 +20,12 @@ export default function LowStock() {
       const res = await fetch(`/api/products/${encodeURIComponent(id)}/minstock`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minStock: n }) });
       if (res.ok) { await load(); return; }
     } catch (e) {}
-    await inventoryService.updateProduct(id, { minStock: n });
-    await load();
+    try {
+      await inventoryService.updateProduct(id, { minStock: n });
+      await load();
+    } catch (err: any) {
+      alert(err?.message || 'Unable to update min stock');
+    }
   };
 
   const low = products.filter(p => (Number(p.minStock || 0) > 0) && Number(p.stock || 0) < Number(p.minStock || 0));
@@ -56,8 +60,12 @@ export default function LowStock() {
                     const qty = Number(q || 0);
                     if (!qty) return alert('Invalid qty');
                     const id = `SE-${Date.now()}`;
-                    await inventoryService.createStock({ id, productId: p.id, qty, type: 'in', date: new Date().toISOString(), note: 'Reorder from LowStock' });
-                    await load();
+                    try {
+                      await inventoryService.createStock({ id, productId: p.id, qty, type: 'in', date: new Date().toISOString(), note: 'Reorder from LowStock' });
+                      await load();
+                    } catch (err: any) {
+                      alert(err?.message || 'Unable to create reorder stock');
+                    }
                   }}>Reorder</button>
                 </td>
               </tr>

@@ -14,6 +14,7 @@ import knex from './db/knex.js';
 import minioClient from './utils/minioClient.js';
 import uploadRoutes from './uploadRoutes.js';
 import reprocessRoutes from './reprocessRoutes.js';
+import { deleteMinioObjectIfExists, parseMinioObjectRef } from './utils/minioStorage.js';
 
 dotenv.config();
 
@@ -52,6 +53,50 @@ const dbGet = (sql, params = []) => {
     });
   });
 };
+
+function resolveProductImageUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^data:image\//i.test(raw)) return raw;
+  if (/^\/api\/product-image\b/i.test(raw)) return raw;
+
+  let bucket = 'images';
+  let objectName = raw;
+
+  if (/^https?:\/\//i.test(raw) || /^\/\//.test(raw)) {
+    try {
+      const url = new URL(raw.startsWith('//') ? `http:${raw}` : raw);
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2) {
+        bucket = parts.shift();
+        objectName = parts.join('/');
+      }
+    } catch {
+      objectName = raw;
+    }
+  } else {
+    objectName = raw.replace(/^\/+/, '').replace(/^images\//i, '');
+  }
+
+  if (!objectName) return '';
+  return `/api/product-image?bucket=${encodeURIComponent(bucket)}&name=${encodeURIComponent(objectName)}`;
+}
+
+async function resolveExistingProductImageUrl(value) {
+  const url = resolveProductImageUrl(value);
+  if (!url || !/^\/api\/product-image\b/i.test(url)) return url;
+
+  try {
+    const parsed = new URL(url, 'http://localhost');
+    const bucket = parsed.searchParams.get('bucket') || 'images';
+    const objectName = parsed.searchParams.get('name') || '';
+    if (!objectName) return '';
+    await minioClient.statObject(bucket, objectName);
+    return url;
+  } catch {
+    return '';
+  }
+}
 
 // Scheduled expiry checker (runs daily by default)
 async function runExpiryCheckAndNotify(days = 30) {
@@ -159,9 +204,40 @@ if (process.env.ENABLE_EXPIRY_CRON === '1') {
     if (!hasCustomerPhone) await knex.schema.table('sales', (t) => t.string('customerPhone')).catch(() => {});
     const hasCustomerLoginId = await knex.schema.hasColumn('sales', 'customerLoginId').catch(() => false);
     if (!hasCustomerLoginId) await knex.schema.table('sales', (t) => t.string('customerLoginId')).catch(() => {});
+    const hasSaleStatus = await knex.schema.hasColumn('sales', 'status').catch(() => false);
+    if (!hasSaleStatus) await knex.schema.table('sales', (t) => t.string('status').defaultTo('completed')).catch(() => {});
+
+    // Ensure sales.invoice_no is unique to prevent duplicate invoice numbers
+    try { await knex.raw('CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_invoice_no ON sales(invoice_no)'); } catch (e) { /* ignore */ }
+
+    // invoice counters table for generating sequential invoice numbers
+    const hasInvoiceCounters = await knex.schema.hasTable('invoice_counters').catch(() => false);
+    if (!hasInvoiceCounters) {
+      await knex.schema.createTable('invoice_counters', (t) => {
+        t.string('name').primary();
+        t.integer('seq').notNullable().defaultTo(0);
+      }).catch(() => {});
+      try { await knex('invoice_counters').insert({ name: 'sales', seq: 0 }).catch(() => {}); } catch (e) {}
+    }
 
     const hasProductImageUrl = await knex.schema.hasColumn('products', 'imageUrl').catch(() => false);
     if (!hasProductImageUrl) await knex.schema.table('products', (t) => t.string('imageUrl')).catch(() => {});
+    const hasProductCategory = await knex.schema.hasColumn('products', 'category').catch(() => false);
+    if (!hasProductCategory) await knex.schema.table('products', (t) => t.string('category').defaultTo('')).catch(() => {});
+
+    // Core accounting accounts used by normalized POS journal postings.
+    const coreAccounts = [
+      ['1200', 'Accounts Receivable', 'Asset'],
+      ['2100', 'VAT Payable', 'Liability'],
+      ['5000', 'Cost of Goods Sold', 'Expense'],
+      ['1300', 'Inventory', 'Asset'],
+    ];
+    for (const [code, name, type] of coreAccounts) {
+      const existing = await knex('accounts').where('account_code', code).first().catch(() => null);
+      if (!existing) {
+        await knex('accounts').insert({ account_code: code, account_name: name, account_type: type, parent_account_id: null, opening_balance: 0, current_balance: 0 }).catch(() => {});
+      }
+    }
 
     // Login table extra columns
     // Ensure display_name exists (some older DBs used `name`)
@@ -297,6 +373,7 @@ function requireRole(roles = []) {
 }
 
 const app = express();
+app.disable('x-powered-by');
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -398,62 +475,25 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: process.env.EXPRESS_JSON_LIMIT || '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: process.env.EXPRESS_URLENCODED_LIMIT || '5mb' }));
 
-// Lightweight in-memory schema cache to avoid repeated hasColumn checks
-const schemaCache = {
-  notifications: null // will be set to { hasRole: bool, hasRead: bool }
-};
-
-// Initialize notifications schema cache asynchronously (best-effort)
-(async function initSchemaCache() {
-  try {
-    const hasNotifications = await knex.schema.hasTable('notifications').catch(() => false);
-    if (!hasNotifications) {
-      schemaCache.notifications = { hasRole: false, hasRead: false };
-      return;
+const rateLimitBuckets = new Map();
+function createRateLimiter({ windowMs = 60_000, max = 60, keyPrefix = 'global' }) {
+  return (req, res, next) => {
+    const key = `${keyPrefix}:${req.ip || req.headers['x-forwarded-for'] || 'unknown'}`;
+    const now = Date.now();
+    let bucket = rateLimitBuckets.get(key) || { count: 0, resetAt: now + windowMs };
+    if (now > bucket.resetAt) {
+      bucket = { count: 0, resetAt: now + windowMs };
     }
-    const hasRole = await knex.schema.hasColumn('notifications', 'role').catch(() => false);
-    const hasRead = await knex.schema.hasColumn('notifications', 'read').catch(() => false);
-    schemaCache.notifications = { hasRole, hasRead };
-    console.log('[schemaCache] notifications', schemaCache.notifications);
-  } catch (e) {
-    console.warn('initSchemaCache error', e.message || e);
-  }
-})();
+    bucket.count = (bucket.count || 0) + 1;
+    rateLimitBuckets.set(key, bucket);
+    if (bucket.count > max) {
+      res.setHeader('Retry-After', Math.ceil((bucket.resetAt - now) / 1000));
+      return res.status(429).json({ success: false, error: 'Rate limit exceeded' });
+    }
+    return next();
+  };
 
-// Trust proxy so req.secure and x-forwarded-* headers are respected when behind a reverse proxy
-app.set('trust proxy', 1);
-
-// Redirect HTTP -> HTTPS in production
-if (process.env.NODE_ENV === 'production') {
-  app.use((req, res, next) => {
-    try {
-      const proto = req.headers['x-forwarded-proto'] || req.protocol || '';
-      if (String(proto).includes('https') || req.secure) return next();
-      // Only redirect for safe methods
-      if (req.method === 'GET' || req.method === 'HEAD') {
-        const host = req.headers.host || '';
-        return res.redirect(301, `https://${host}${req.originalUrl}`);
-      }
-      return res.status(426).json({ success: false, error: 'Use HTTPS' });
-    } catch (e) { return next(); }
-  });
 }
-
-// --- Health check ---
-app.get('/api/health', async (_req, res) => {
-  try {
-    const hasContacts = await knex.schema.hasTable('contacts').catch(() => false);
-    if (!hasContacts) {
-      return res.json({ status: 'ok', contacts: 0, time: new Date().toISOString() });
-    }
-
-    const row = await knex('contacts').count('* as count').first();
-    res.json({ status: 'ok', contacts: row ? row.count : 0, time: new Date().toISOString() });
-  } catch (err) {
-    res.json({ status: 'ok', contacts: 0, time: new Date().toISOString() });
-  }
-});
-
 // --- QR image from MinIO (for receipts / billing preview) ---
 app.get('/api/qr-image', async (req, res) => {
   try {
@@ -484,6 +524,70 @@ app.use((err, req, res, next) => {
 
 app.use('/api', uploadRoutes);
 app.use('/api', reprocessRoutes);
+
+app.get('/api/product-image', async (req, res) => {
+  try {
+    const bucket = String(req.query.bucket || 'images').trim();
+    const name = String(req.query.name || req.query.path || '').trim();
+    if (!bucket || !name) {
+      return res.status(400).json({ success: false, error: 'bucket and name are required' });
+    }
+
+    const stat = await minioClient.statObject(bucket, name).catch(() => null);
+    if (!stat) {
+      const escapedName = String(name)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      const placeholderSvg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="Image unavailable">
+          <defs>
+            <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#f7f7f7" />
+              <stop offset="100%" stop-color="#eceff4" />
+            </linearGradient>
+          </defs>
+          <rect width="320" height="240" rx="18" fill="url(#g)" />
+          <rect x="36" y="28" width="248" height="160" rx="14" fill="#ffffff" stroke="#d9e2ef" />
+          <circle cx="120" cy="88" r="20" fill="#d4dbea" />
+          <path d="M72 168l48-48 34 34 24-24 72 72H72z" fill="#c8d2e3" />
+          <text x="160" y="214" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="#68758a">Image unavailable</text>
+          <text x="160" y="44" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#8a96a8">${escapedName}</text>
+        </svg>`;
+      const buf = Buffer.from(placeholderSvg, 'utf8');
+      res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Content-Length', buf.length);
+      return res.status(200).end(buf);
+    }
+    const contentType = stat?.metaData?.['content-type'] || stat?.metaData?.['Content-Type'] || 'image/jpeg';
+
+    const stream = await new Promise((resolve, reject) => {
+      minioClient.getObject(bucket, name, (err, dataStream) => {
+        if (err) return reject(err);
+        resolve(dataStream);
+      });
+    });
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    stream.on('error', (err) => {
+      if (!res.headersSent) {
+        res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+        res.status(200).end(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240"><rect width="320" height="240" rx="18" fill="#f3f4f6"/><text x="160" y="122" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#6b7280">Image unavailable</text></svg>`, 'utf8'));
+      }
+    });
+    stream.pipe(res);
+  } catch (err) {
+    const fallback = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240"><rect width="320" height="240" rx="18" fill="#f3f4f6"/><text x="160" y="122" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#6b7280">Image unavailable</text></svg>`, 'utf8');
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Content-Length', fallback.length);
+    res.status(200).end(fallback);
+  }
+});
 
 // --- Notifications table ---
 sqliteDb.run(`
@@ -587,44 +691,71 @@ app.post('/api/diagnostics/client-failure', async (req, res) => {
 app.get('/api/convert-date', async (req, res) => {
   try {
     const { date, to } = req.query;
-    if (!date) return res.status(400).json({ success: false, error: 'date query param required (YYYY-MM-DD)' });
+    if (!date) return res.status(400).json({ success: false, error: 'date query param required (YYYY-MM-DD or BS format)' });
     const rawDate = String(date);
-    // Try to proxy to Bolpatra openDateConverter (best-effort)
+
+    // Try to use a dedicated Nepali date conversion library if available to provide accurate AD<->BS conversion.
+    // This uses a best-effort dynamic import so the server still runs when the package is not installed.
+    try {
+      const lib = await import('nepali-date-converter').catch(() => null);
+      const mod = lib && (lib.default || lib) ? (lib.default || lib) : null;
+      if (mod) {
+        // detect common API shapes and use them
+        if (String(to).toLowerCase() === 'nepali' || String(to).toLowerCase() === 'bs') {
+          if (typeof mod.ad2bs === 'function') {
+            const out = mod.ad2bs(rawDate);
+            return res.json({ success: true, source: 'nepali-date-converter', date: rawDate, nepali: out });
+          }
+          if (typeof mod.toBS === 'function') {
+            const out = mod.toBS(new Date(rawDate));
+            return res.json({ success: true, source: 'nepali-date-converter', date: rawDate, nepali: out });
+          }
+        }
+        // BS to AD
+        if (String(to).toLowerCase() === 'gregorian' || String(to).toLowerCase() === 'ad') {
+          if (typeof mod.bs2ad === 'function') {
+            const out = mod.bs2ad(rawDate);
+            return res.json({ success: true, source: 'nepali-date-converter', date: rawDate, gregorian: out });
+          }
+          if (typeof mod.toAD === 'function') {
+            const out = mod.toAD(rawDate);
+            return res.json({ success: true, source: 'nepali-date-converter', date: rawDate, gregorian: out });
+          }
+        }
+      }
+    } catch (libErr) {
+      // library not available or failed — fallthrough to fallback implementation
+    }
+
+    // Fallback behavior (existing): attempt Bolpatra proxy then localized display
     const target = 'https://www.bolpatra.gov.np/egp/openDateConverter';
     let fetched = null;
     try {
       const url = new URL(target);
-      // Attempt GET first with query param
       url.searchParams.set('date', rawDate);
-      // some implementations expect a direction param 'to' but we'll include if provided
       if (to) url.searchParams.set('to', String(to));
       const r = await fetch(url.toString(), { method: 'GET' });
       const text = await r.text();
       fetched = text;
-      // try to extract obvious BS/AD strings from HTML if present
       const nepaliMatch = text.match(/(\d{3,4}[-\/]\d{1,2}[-\/]\d{1,2})/);
-      if (nepaliMatch) {
-        // return best-effort
-        return res.json({ success: true, source: 'bolpatra-get', raw: text, converted: nepaliMatch[0] });
-      }
+      if (nepaliMatch) return res.json({ success: true, source: 'bolpatra-get', raw: text, converted: nepaliMatch[0] });
     } catch (err) {
-      // ignore and fallback
       fetched = null;
     }
 
-    // Fallback: provide a simple localized representation and Nepali numerals
     const dt = new Date(rawDate);
     if (Number.isNaN(dt.getTime())) return res.status(400).json({ success: false, error: 'invalid date' });
     const en = dt.toISOString().slice(0, 10);
-    // produce a Nepali-looking date by using Nepali numerals and Nepali month names (approximate)
     const nepMonths = ['बैशाख','जेठ','आषाढ','श्रावण','भदौ','आश्विन','कार्तिक','मंसिर','पुष','माघ','फागुन','चैत'];
     const nepDay = dt.getDate();
     const nepMonth = nepMonths[dt.getMonth()];
-    const nepYearApprox = dt.getFullYear(); // NOTE: not actual BS conversion – best-effort
+    const nepYearApprox = dt.getFullYear();
     const nepaliDigits = {'0':'०','1':'१','2':'२','3':'३','4':'४','5':'५','6':'६','7':'७','8':'८','9':'९'};
     const toNepaliNumerals = (s) => String(s).split('').map(c => nepaliDigits[c] ?? c).join('');
     const nepaliDate = `${toNepaliNumerals(nepDay)} ${nepMonth} ${toNepaliNumerals(nepYearApprox)}`;
-    return res.json({ success: true, source: fetched ? 'bolpatra-raw' : 'fallback', date: en, nepali: nepaliDate });
+    // If the conversion library wasn't installed, inform the caller how to enable accurate conversion
+    const hint = 'For accurate AD<->BS conversion install a Nepali date library (e.g. `npm i nepali-date-converter`) and restart the server.';
+    return res.json({ success: true, source: fetched ? 'bolpatra-raw' : 'fallback', date: en, nepali: nepaliDate, hint });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -739,7 +870,7 @@ app.get('/api/pos/products', async (req, res) => {
       expiryDate: p.expiryDate || '',
       minStock: Number(p.minStock || 0),
       image: p.image || '',
-      imageUrl: p.imageUrl || '',
+      imageUrl: resolveProductImageUrl(p.imageUrl || p.image || ''),
       loginId: p.loginId ? String(p.loginId) : '',
     }));
     res.json({ success: true, products: mapped });
@@ -856,10 +987,11 @@ app.post('/api/pos/sales', async (req, res) => {
       customerAlternativePhone,
       note,
       warehouseId,
+      status,
     } = req.body || {};
 
-    if (!id || !date || !cashier) {
-      return res.status(400).json({ success: false, error: 'Sale id, date and cashier are required.' });
+    if (!date || !cashier) {
+      return res.status(400).json({ success: false, error: 'Sale date and cashier are required.' });
     }
 
     const saleItems = Array.isArray(items) ? items : [];
@@ -896,9 +1028,11 @@ app.post('/api/pos/sales', async (req, res) => {
     const salePaid = Number(amountPaid ?? saleAmount);
     const saleDue = Number(amountDue ?? Math.max(0, saleAmount - salePaid));
     const saleQty = saleItems.reduce((sum, it) => sum + Number(it.qty || it.quantity || 0), 0);
+    const saleStatus = String(status || 'completed').trim().toLowerCase();
+    const shouldAdjustStock = !['pending', 'cancelled'].includes(saleStatus);
 
     const saleInsert = {
-      invoice_no: String(id).trim(),
+      invoice_no: id ? String(id).trim() : null,
       customer_id: resolvedCustomerId,
       login_id: cashierLookup ? cashierLookup.id : null,
       warehouse_id: warehouseId ? Number(warehouseId) : 1,
@@ -918,46 +1052,222 @@ app.post('/api/pos/sales', async (req, res) => {
       loyalty_point_earned: 0,
       loyalty_total_points: 0,
       note: note || null,
+      status: saleStatus || 'completed',
     };
 
-    const inserted = await knex('sales').insert(saleInsert);
-    const salePkId = Array.isArray(inserted) ? inserted[0] : inserted;
+    // Perform sale insert into normalized tables (invoices, invoice_items, payments, stock_movements, journal) inside a DB transaction
+    let invoicePkId;
+    try {
+      await knex.transaction(async (trx) => {
+        // Ensure invoice number exists; if not provided, generate a sequential invoice atomically
+        if (!saleInsert.invoice_no) {
+          let counter = await trx('invoice_counters').where('name', 'sales').first();
+          if (!counter) {
+            await trx('invoice_counters').insert({ name: 'sales', seq: 1 });
+            counter = { name: 'sales', seq: 1 };
+          } else {
+            const newSeq = Number(counter.seq || 0) + 1;
+            await trx('invoice_counters').where('name', 'sales').update({ seq: newSeq });
+            counter.seq = newSeq;
+          }
+          const seqStr = String(counter.seq).padStart(4, '0');
+          saleInsert.invoice_no = `INV-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${seqStr}`;
+        }
 
-    for (const it of saleItems) {
-      const productId = String(it.productId || it.id || it._id || it.product_id || it.product || '').trim();
-      if (!productId) continue;
-      const qty = Number(it.qty || it.quantity || 0);
-      const rate = Number(it.rate || 0);
-      const amount = Number(it.total || qty * rate);
-      const product = await knex('products').where('id', productId).first();
-      await knex('sale_items').insert({
-        sale_id: salePkId,
-        product_id: productId,
-        product_name: String(it.name || it.productName || product?.name_en || product?.nameEn || productId),
-        hs_code: it.hs_code || it.hsCode || null,
-        qty,
-        rate,
-        discount: Number(it.discount || 0),
-        vat_percent: Number(it.vat_percent || it.vatPercent || 13),
-        vat_amount: Number(it.vat_amount || it.vatAmount || 0),
-        amount,
-        batch_no: it.batch_no || it.batchNo || null,
-        expiry_date: it.expiry_date || it.expiryDate || null,
+        // Insert into invoices (normalized)
+        const invoicePayload = {
+          invoice_no: saleInsert.invoice_no,
+          customer_id: saleInsert.customer_id,
+          login_id: saleInsert.login_id,
+          warehouse_id: saleInsert.warehouse_id,
+          bill_date: saleInsert.bill_date,
+          miti: saleInsert.miti || null,
+          payment_mode: saleInsert.payment_mode,
+          gross_amount: saleInsert.gross_amount,
+          discount_amount: saleInsert.discount_amount,
+          taxable_amount: saleInsert.taxable_amount,
+          vat_amount: saleInsert.vat_amount,
+          net_amount: saleInsert.net_amount,
+          paid_amount: saleInsert.paid_amount,
+          due_amount: saleInsert.due_amount,
+          tender_amount: saleInsert.tender_amount,
+          change_amount: saleInsert.change_amount,
+          total_qty: saleInsert.total_qty,
+          loyalty_point_earned: saleInsert.loyalty_point_earned,
+          loyalty_total_points: saleInsert.loyalty_total_points,
+          note: saleInsert.note,
+          created_at: knex.fn.now(),
+        };
+
+        const insertedInvoice = await trx('invoices').insert(invoicePayload);
+        invoicePkId = Array.isArray(insertedInvoice) ? insertedInvoice[0] : insertedInvoice;
+
+        // Insert invoice items and stock movements
+        for (const it of saleItems) {
+          const productId = String(it.productId || it.id || it._id || it.product_id || it.product || '').trim();
+          if (!productId) continue;
+          const qty = Number(it.qty || it.quantity || 0);
+          const rate = Number(it.rate || 0);
+          const amount = Number(it.total || qty * rate);
+          const product = await trx('products').where('id', productId).first();
+
+          await trx('invoice_items').insert({
+            invoice_id: invoicePkId,
+            product_id: productId,
+            product_name: String(it.name || it.productName || product?.name_en || product?.nameEn || productId),
+            hs_code: it.hs_code || it.hsCode || null,
+            qty,
+            rate,
+            discount: Number(it.discount || 0),
+            vat_percent: Number(it.vat_percent || it.vatPercent || 13),
+            vat_amount: Number(it.vat_amount || it.vatAmount || 0),
+            amount,
+            batch_no: it.batch_no || it.batchNo || null,
+            expiry_date: it.expiry_date || it.expiryDate || null,
+          });
+
+          if (shouldAdjustStock) {
+            // decrement earliest product_stock rows (FIFO-like)
+            let remaining = qty;
+            const stocks = await trx('product_stock').where('product_id', productId).orderBy('id', 'asc');
+            for (const srow of stocks) {
+              if (remaining <= 0) break;
+              const available = Number(srow.quantity || 0);
+              if (available <= 0) continue;
+              const take = Math.min(available, remaining);
+              await trx('product_stock').where('id', srow.id).decrement('quantity', take);
+              remaining -= take;
+            }
+
+            // Record stock movement
+            await trx('stock_movements').insert({
+              product_id: productId,
+              movement_type: 'sale',
+              reference_id: invoicePkId,
+              qty_in: 0,
+              qty_out: qty,
+              balance_qty: 0,
+              movement_date: knex.fn.now(),
+            });
+          }
+        }
+
+        // Insert payment record(s)
+          if (Number(salePaid) > 0) {
+            // map payment columns to actual DB schema (some DBs use different column names)
+            const payCols = await trx('payments').columnInfo().catch(() => ({}));
+            const pick = (a, b, c, d) => (payCols[a] ? a : (payCols[b] ? b : (payCols[c] ? c : (payCols[d] ? d : null))));
+            const invoiceRefCol = pick('invoice_id', 'sale_id', 'bill_id', 'receipt_id');
+            const methodCol = pick('payment_method', 'payment_mode', 'method');
+            const paidCol = pick('paid_amount', 'amount', 'paid');
+            const tenderCol = pick('tender_amount', 'tender', 'tender_amt');
+            const returnCol = pick('return_amount', 'change_amount', 'return_amt');
+            const txnCol = pick('transaction_no', 'txn_no', 'transaction_id');
+            const dateCol = pick('payment_date', 'created_at', 'date');
+
+            const paymentPayload = {};
+            if (invoiceRefCol) paymentPayload[invoiceRefCol] = invoicePkId;
+            if (methodCol) paymentPayload[methodCol] = saleInsert.payment_mode || 'Cash';
+            if (paidCol) paymentPayload[paidCol] = Number(salePaid || 0);
+            if (tenderCol) paymentPayload[tenderCol] = Number(saleInsert.tender_amount || salePaid || 0);
+            if (returnCol) paymentPayload[returnCol] = 0;
+            if (txnCol) paymentPayload[txnCol] = null;
+            if (dateCol) paymentPayload[dateCol] = knex.fn.now();
+
+            // if no known columns found, fall back to generic insert (may fail)
+            if (Object.keys(paymentPayload).length === 0) {
+              await trx('payments').insert({ invoice_id: invoicePkId, payment_method: saleInsert.payment_mode || 'Cash', paid_amount: Number(salePaid || 0), tender_amount: Number(saleInsert.tender_amount || salePaid || 0), return_amount: 0, transaction_no: null, payment_date: knex.fn.now() });
+            } else {
+              await trx('payments').insert(paymentPayload);
+            }
+          }
+
+        // Balanced journal entry: debit received cash/bank + receivable, credit taxable sales + VAT payable.
+        // We only post journals for completed/stock-adjusting sales so drafts don't pollute the ledger.
+        if (shouldAdjustStock) {
+          try {
+            const cashAcct = await trx('accounts').where('account_code', '1000').first();
+            const bankAcct = await trx('accounts').where('account_code', '1100').first();
+            const arAcct = await trx('accounts').where('account_code', '1200').first();
+            const vatAcct = await trx('accounts').where('account_code', '2100').first();
+            const salesAcct = await trx('accounts').where('account_code', '3000').first();
+
+            const netCashReceived = Math.max(0, Number(saleInsert.paid_amount || 0) - Number(saleInsert.change_amount || 0));
+            const dueBalance = Math.max(0, Number(saleInsert.due_amount || 0));
+            const taxableSale = Number(saleInsert.taxable_amount || 0);
+            const vatSale = Number(saleInsert.vat_amount || 0);
+
+            const journalLines = [];
+            const paymentAcct = String(saleInsert.payment_mode || 'Cash').toLowerCase().includes('bank') ? bankAcct : cashAcct;
+            if (netCashReceived > 0 && paymentAcct) {
+              journalLines.push({ side: 'debit', account_id: paymentAcct.id, amount: netCashReceived, description: `Payment received for ${saleInsert.invoice_no}` });
+            }
+            if (dueBalance > 0 && arAcct) {
+              journalLines.push({ side: 'debit', account_id: arAcct.id, amount: dueBalance, description: `Receivable for ${saleInsert.invoice_no}` });
+            }
+            if (taxableSale > 0 && salesAcct) {
+              journalLines.push({ side: 'credit', account_id: salesAcct.id, amount: taxableSale, description: `Sales revenue ${saleInsert.invoice_no}` });
+            }
+            if (vatSale > 0 && vatAcct) {
+              journalLines.push({ side: 'credit', account_id: vatAcct.id, amount: vatSale, description: `VAT payable ${saleInsert.invoice_no}` });
+            }
+
+            const debitTotal = journalLines.filter((l) => l.side === 'debit').reduce((sum, l) => sum + Number(l.amount || 0), 0);
+            const creditTotal = journalLines.filter((l) => l.side === 'credit').reduce((sum, l) => sum + Number(l.amount || 0), 0);
+            const diff = Math.abs(debitTotal - creditTotal);
+            if (diff > 0.01) {
+              throw new Error(`Balanced journal posting required but debits (${debitTotal.toFixed(2)}) and credits (${creditTotal.toFixed(2)}) differ for invoice ${saleInsert.invoice_no}`);
+            }
+
+            if (journalLines.length > 0) {
+              const voucherNo = `JV-${saleInsert.invoice_no}`;
+              const [voucherId] = await trx('journal_vouchers').insert({ voucher_no: voucherNo, voucher_date: saleInsert.bill_date || knex.fn.now(), narration: `Sale ${saleInsert.invoice_no}`, reference_no: saleInsert.invoice_no, login_id: saleInsert.login_id || null, created_at: knex.fn.now() });
+              for (const line of journalLines) {
+                await trx('journal_entries').insert({ voucher_id: voucherId, account_id: line.account_id, debit: line.side === 'debit' ? Number(line.amount || 0) : 0, credit: line.side === 'credit' ? Number(line.amount || 0) : 0, description: line.description });
+              }
+            }
+          } catch (jeErr) {
+            console.warn('journal entry failed', jeErr?.message || jeErr);
+            throw jeErr;
+          }
+        }
+
+        // For backward compatibility, also insert into legacy 'sales' + 'sale_items' tables so GET /api/pos/sales continues to work
+        try {
+          const legacySale = { ...saleInsert };
+          legacySale.items = JSON.stringify(saleItems.map(it => ({ productId: it.productId || it.id || it.product_id || it.product, name: it.name || it.productName, qty: it.qty || it.quantity || 0, rate: it.rate || 0, total: it.total || 0 })));
+          const insertedLegacy = await trx('sales').insert(legacySale).catch((e) => { throw e; });
+          const legacyId = Array.isArray(insertedLegacy) ? insertedLegacy[0] : insertedLegacy;
+          // also insert legacy sale_items for compatibility (best-effort)
+          for (const it of saleItems) {
+            try {
+              const productId = String(it.productId || it.id || it._id || it.product_id || it.product || '').trim();
+              if (!productId) continue;
+              const qty = Number(it.qty || it.quantity || 0);
+              const rate = Number(it.rate || 0);
+              const amount = Number(it.total || qty * rate);
+              await trx('sale_items').insert({ sale_id: legacyId, product_id: productId, product_name: it.name || it.productName || productId, hs_code: it.hs_code || null, qty, rate, discount: Number(it.discount || 0), vat_percent: Number(it.vat_percent || it.vatPercent || 13), vat_amount: Number(it.vat_amount || it.vatAmount || 0), amount, batch_no: it.batch_no || null, expiry_date: it.expiry_date || null });
+            } catch (siErr) {
+              console.warn('legacy sale_items insert failed (ignored):', siErr?.message || siErr);
+            }
+          }
+        } catch (legacyErr) {
+          // legacy schema mismatch is tolerated; log and continue so normalized flow still succeeds
+          console.warn('legacy sales insert failed (ignored):', legacyErr?.message || legacyErr);
+        }
       });
-
-      const stockRow = await knex('product_stock').where('product_id', productId).orderBy('id', 'asc').first();
-      if (stockRow) {
-        await knex('product_stock').where('id', stockRow.id).decrement('quantity', qty);
-      }
+    } catch (txErr) {
+      return res.status(500).json({ success: false, error: txErr.message || String(txErr) });
     }
 
-    const saleRow = await knex('sales').where('id', salePkId).first();
-    const saleItemsRows = await knex('sale_items').where('sale_id', salePkId).orderBy('id', 'asc');
+    // Read back inserted rows for response (outside transaction)
+    const saleRow = await knex('invoices').where('id', invoicePkId).first().catch(() => null) || await knex('sales').where('id', invoicePkId).first();
+    const saleItemsRows = await knex('invoice_items').where('invoice_id', invoicePkId).orderBy('id', 'asc').catch(() => []) || await knex('sale_items').where('sale_id', invoicePkId).orderBy('id', 'asc');
     const customerRow = resolvedCustomerId ? await knex('customers').where('id', resolvedCustomerId).first() : null;
     const responseSale = {
-      id: saleRow.invoice_no,
-      invoice_no: saleRow.invoice_no,
-      customerId: saleRow.customer_id ? String(saleRow.customer_id) : '',
+      id: saleRow?.invoice_no || saleInsert.invoice_no,
+      invoice_no: saleRow?.invoice_no || saleInsert.invoice_no,
+      customerId: saleRow?.customer_id ? String(saleRow.customer_id) : '',
       customerName: customerRow?.full_name || customerNameValue || 'Walk-in',
       customerPhone: customerRow?.phone || customerPhone || '',
       customerEmail: customerRow?.email || customerEmail || '',
@@ -975,17 +1285,17 @@ app.post('/api/pos/sales', async (req, res) => {
         total: Number(si.amount),
         cost: 0,
       })),
-      subtotal: Number(saleRow.taxable_amount || saleSubtotal),
-      discount: Number(saleRow.discount_amount || 0),
-      tax: Number(saleRow.vat_amount || 0),
-      total: Number(saleRow.net_amount || saleAmount),
-      amountPaid: Number(saleRow.paid_amount || salePaid),
-      amountDue: Number(saleRow.due_amount || saleDue),
-      date: saleRow.bill_date,
+      subtotal: Number(saleRow?.taxable_amount || saleSubtotal),
+      discount: Number(saleRow?.discount_amount || 0),
+      tax: Number(saleRow?.vat_amount || 0),
+      total: Number(saleRow?.net_amount || saleAmount),
+      amountPaid: Number(saleRow?.paid_amount || salePaid),
+      amountDue: Number(saleRow?.due_amount || saleDue),
+      date: saleRow?.bill_date,
       cashier: cashierLookup?.full_name || cashier,
-      paymentMode: saleRow.payment_mode || paymentMode || 'Cash',
-      status: 'completed',
-      note: saleRow.note || note || '',
+      paymentMode: saleRow?.payment_mode || paymentMode || 'Cash',
+      status: saleRow?.status || saleStatus || 'completed',
+      note: saleRow?.note || note || '',
     };
 
     try { io.emit('sale:new', responseSale); } catch (e) {}
@@ -1182,8 +1492,26 @@ app.get('/api/orders', async (req, res) => {
 // Products endpoints (basic)
 app.get('/api/products', async (req, res) => {
   try {
-    const rows = await knex('products').select('id', 'nameEn', 'stock', 'unit', 'purchasePrice', 'sellingPrice', 'minStock', 'imageUrl').orderBy('nameEn', 'asc');
-    res.json({ success: true, products: rows });
+    const rows = await knex('products')
+      .select(
+        'id',
+        'name_en as nameEn',
+        knex.raw('0 as stock'),
+        'unit_id as unit',
+        'purchase_price as purchasePrice',
+        'selling_price as sellingPrice',
+        'min_stock as minStock',
+        'imageUrl',
+        'image'
+      )
+      .orderBy('name_en', 'asc');
+    res.json({
+      success: true,
+      products: await Promise.all(rows.map(async (p) => ({
+        ...p,
+        imageUrl: await resolveExistingProductImageUrl(p.imageUrl || p.image || ''),
+      }))),
+    });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1191,7 +1519,13 @@ app.get('/api/products/:id', async (req, res) => {
   try {
     const id = String(req.params.id);
     const row = await knex('products').where('id', id).first();
-    res.json({ success: true, product: row });
+    res.json({
+      success: true,
+      product: row ? {
+        ...row,
+        imageUrl: await resolveExistingProductImageUrl(row.imageUrl || row.image || ''),
+      } : null,
+    });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -1209,9 +1543,37 @@ app.post('/api/products/:id/minstock', requirePosAuth, requireRole(['owner','adm
 app.post('/api/products', requirePosAuth, requireRole(['owner','admin']), async (req, res) => {
   try {
     const { id, nameEn, nameNe, category, stock, unit, purchasePrice, sellingPrice, emoji, minStock, imageUrl } = req.body || {};
-    if (!id || !nameEn) return res.status(400).json({ success: false, error: 'id and nameEn required' });
-    await knex('products').insert({ id: String(id), nameEn: String(nameEn), nameNe: String(nameNe || ''), category: String(category || ''), stock: Number(stock || 0), unit: String(unit || ''), purchasePrice: Number(purchasePrice || 0), sellingPrice: Number(sellingPrice || 0), emoji: String(emoji || '📦'), minStock: Number(minStock || 0), imageUrl: String(imageUrl || '') }).onConflict('id').merge();
-    const p = await knex('products').where('id', String(id)).first();
+    if (!id || !(nameEn || nameEn === '')) return res.status(400).json({ success: false, error: 'id and nameEn required' });
+
+    // map to actual DB columns (some DBs use snake_case while others use camelCase)
+    const cols = await knex('products').columnInfo().catch(() => ({}));
+    const hasCol = (a, b) => (cols[a] ? a : (cols[b] ? b : null));
+
+    const idCol = hasCol('id', 'id') || 'id';
+    const nameEnCol = hasCol('nameEn', 'name_en') || 'nameEn';
+    const nameNeCol = hasCol('nameNe', 'name_ne') || 'nameNe';
+    const purchasePriceCol = hasCol('purchasePrice', 'purchase_price') || 'purchasePrice';
+    const sellingPriceCol = hasCol('sellingPrice', 'selling_price') || 'sellingPrice';
+    const minStockCol = hasCol('minStock', 'min_stock');
+    const imageUrlCol = hasCol('imageUrl', 'image_url');
+    const categoryCol = hasCol('category', 'category');
+    const emojiCol = hasCol('emoji', 'emoji');
+
+    const payload = {};
+    payload[idCol] = String(id);
+    payload[nameEnCol] = String(nameEn);
+    payload[nameNeCol] = String(nameNe || '');
+    if (cols['stock'] !== undefined) payload['stock'] = Number(stock || 0);
+    if (cols['unit'] !== undefined) payload['unit'] = String(unit || '');
+    if (purchasePriceCol) payload[purchasePriceCol] = Number(purchasePrice || 0);
+    if (sellingPriceCol) payload[sellingPriceCol] = Number(sellingPrice || 0);
+    if (minStockCol) payload[minStockCol] = Number(minStock || 0);
+    if (categoryCol) payload[categoryCol] = String(category || '');
+    if (imageUrlCol) payload[imageUrlCol] = String(imageUrl || '');
+    if (emojiCol) payload[emojiCol] = String(emoji || '📦');
+
+    await knex('products').insert(payload).onConflict('id').merge();
+    const p = await knex('products').where(idCol, String(id)).first();
     res.json({ success: true, product: p });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -1233,8 +1595,38 @@ app.put('/api/products/:id', requirePosAuth, requireRole(['owner','admin']), asy
     }
     if (sets.length === 0) return res.status(400).json({ success: false, error: 'no updatable fields' });
     vals.push(id);
-    await knex('products').where('id', id).update(Object.fromEntries(keys.filter(k=>['nameEn','nameNe','category','stock','unit','purchasePrice','sellingPrice','emoji','minStock','imageUrl'].includes(k)).map(k=>[k, patch[k]])));
+    const existing = await knex('products').where('id', id).first();
+    const cols = await knex('products').columnInfo().catch(() => ({}));
+    const mapCol = (a, b) => (cols[a] ? a : (cols[b] ? b : null));
+    const nameEnCol = mapCol('nameEn', 'name_en') || 'nameEn';
+    const nameNeCol = mapCol('nameNe', 'name_ne') || 'nameNe';
+    const purchasePriceCol = mapCol('purchasePrice', 'purchase_price') || 'purchasePrice';
+    const sellingPriceCol = mapCol('sellingPrice', 'selling_price') || 'sellingPrice';
+    const minStockCol = mapCol('minStock', 'min_stock');
+    const imageUrlCol = mapCol('imageUrl', 'image_url');
+    const categoryCol = mapCol('category', 'category');
+    const emojiCol = mapCol('emoji', 'emoji');
+
+    const updatePayload = {};
+    for (const k of keys) {
+      if (k === 'nameEn' && nameEnCol) updatePayload[nameEnCol] = patch[k];
+      if (k === 'nameNe' && nameNeCol) updatePayload[nameNeCol] = patch[k];
+      if (k === 'category' && categoryCol) updatePayload[categoryCol] = patch[k];
+      if (k === 'stock' && cols['stock'] !== undefined) updatePayload['stock'] = patch[k];
+      if (k === 'unit' && cols['unit'] !== undefined) updatePayload['unit'] = patch[k];
+      if (k === 'purchasePrice' && purchasePriceCol) updatePayload[purchasePriceCol] = patch[k];
+      if (k === 'sellingPrice' && sellingPriceCol) updatePayload[sellingPriceCol] = patch[k];
+      if (k === 'emoji' && emojiCol) updatePayload[emojiCol] = patch[k];
+      if (k === 'minStock' && minStockCol) updatePayload[minStockCol] = patch[k];
+      if (k === 'imageUrl' && imageUrlCol) updatePayload[imageUrlCol] = patch[k];
+    }
+    await knex('products').where('id', id).update(updatePayload);
     const p = await knex('products').where('id', id).first();
+    const previousImage = parseMinioObjectRef(existing?.imageUrl || existing?.image || '');
+    const nextImage = parseMinioObjectRef(p?.imageUrl || p?.image || '');
+    if (previousImage && nextImage && (previousImage.bucket !== nextImage.bucket || previousImage.objectName !== nextImage.objectName)) {
+      await deleteMinioObjectIfExists(existing?.imageUrl || existing?.image || '');
+    }
     res.json({ success: true, product: p });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -1242,7 +1634,9 @@ app.put('/api/products/:id', requirePosAuth, requireRole(['owner','admin']), asy
 app.delete('/api/products/:id', requirePosAuth, requireRole(['owner','admin']), async (req, res) => {
   try {
     const id = String(req.params.id);
+    const existing = await knex('products').where('id', id).first();
     await knex('products').where('id', id).del();
+    await deleteMinioObjectIfExists(existing?.imageUrl || existing?.image || '');
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
@@ -1254,10 +1648,49 @@ app.post('/api/stock', requirePosAuth, requireRole(['owner','admin','cashier']),
   try {
     const { id, productId, warehouseId, qty, type, date, note } = req.body || {};
     if (!id || !productId || !qty || !type) return res.status(400).json({ success: false, error: 'id, productId, qty, type required' });
-    await knex('stock_entries').insert({ id: String(id), productId: String(productId), warehouseId: warehouseId ? String(warehouseId) : null, qty: Number(qty), type: String(type), date: String(date || new Date().toISOString()), note: note ? String(note) : null });
-    // update product stock
-    if (type === 'in') await knex('products').where('id', String(productId)).increment('stock', Number(qty));
-    else await knex('products').where('id', String(productId)).decrement('stock', Number(qty));
+    // insert stock entry (map columns if DB uses snake_case)
+    const stockEntryCols = await knex('stock_entries').columnInfo().catch(() => ({}));
+    const stockPayload = {};
+    stockPayload[ stockEntryCols['id'] ? 'id' : (stockEntryCols['entry_id'] ? 'entry_id' : 'id') ] = String(id);
+    if (stockEntryCols['productId']) stockPayload['productId'] = String(productId);
+    else if (stockEntryCols['product_id']) stockPayload['product_id'] = String(productId);
+    if (stockEntryCols['warehouseId']) stockPayload['warehouseId'] = warehouseId ? String(warehouseId) : null;
+    else if (stockEntryCols['warehouse_id']) stockPayload['warehouse_id'] = warehouseId ? String(warehouseId) : null;
+    const qtyColName = stockEntryCols['qty'] ? 'qty' : (stockEntryCols['quantity'] ? 'quantity' : null);
+    if (qtyColName) stockPayload[qtyColName] = Number(qty);
+    stockPayload[ stockEntryCols['type'] ? 'type' : (stockEntryCols['movement_type'] ? 'movement_type' : 'type') ] = String(type);
+    stockPayload[ stockEntryCols['date'] ? 'date' : (stockEntryCols['movement_date'] ? 'movement_date' : 'date') ] = String(date || new Date().toISOString());
+    if (stockEntryCols['note']) stockPayload['note'] = note ? String(note) : null;
+    await knex('stock_entries').insert(stockPayload);
+
+    // update product stock: many schemas don't have `products.stock`; prefer recording in `product_stock` table
+    const psCols = await knex('product_stock').columnInfo().catch(() => ({}));
+    const psQtyCol = psCols['quantity'] ? 'quantity' : (psCols['qty'] ? 'qty' : null);
+    if (type === 'in') {
+      // insert a product_stock row (best-effort)
+      const psPayload = {};
+      if (psCols['product_id']) psPayload['product_id'] = String(productId);
+      else if (psCols['productId']) psPayload['productId'] = String(productId);
+      if (psQtyCol) psPayload[psQtyCol] = Number(qty);
+      if (psCols['warehouse_id'] && warehouseId) psPayload['warehouse_id'] = String(warehouseId);
+      if (Object.keys(psPayload).length > 0) {
+        try { await knex('product_stock').insert(psPayload); } catch (e) { /* ignore best-effort */ }
+      }
+    } else {
+      // decrement earliest product_stock rows (FIFO-like)
+      try {
+        let remaining = Number(qty);
+        const stocks = await knex('product_stock').where(psCols['product_id'] ? 'product_id' : 'productId', String(productId)).orderBy('id', 'asc');
+        for (const srow of stocks) {
+          if (remaining <= 0) break;
+          const available = Number(srow[psQtyCol] || srow.quantity || srow.qty || 0);
+          if (available <= 0) continue;
+          const take = Math.min(available, remaining);
+          if (psQtyCol) await knex('product_stock').where('id', srow.id).decrement(psQtyCol, take);
+          remaining -= take;
+        }
+      } catch (e) { /* best-effort */ }
+    }
     const entry = await knex('stock_entries').where('id', String(id)).first();
     res.json({ success: true, entry });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -1977,4 +2410,5 @@ process.once('SIGINT', () => shutdown('SIGINT'));
 process.once('SIGTERM', () => shutdown('SIGTERM'));
 
 // Export app and server objects for tests and other tooling
-export { app, httpServer, io, knex };
+// (Removed explicit ESM export to avoid runtime loader issues when started via dev watcher)
+globalThis.__dhakal_server__ = { app, httpServer, io, knex };

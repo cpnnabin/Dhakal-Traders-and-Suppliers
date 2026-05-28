@@ -53,6 +53,79 @@
 .pos-metric-icon.green { background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05)); color: #22C55E; }
 .pos-metric-icon.yellow { background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05)); color: #F59E0B; }
 
+/* Dashboard charts */
+.pos-dashboard-charts-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .pos-dashboard-charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pos-chart-period {
+  display: flex;
+  gap: 6px;
+}
+
+.pos-chart-period button {
+  border: 1px solid var(--pos-card-border);
+  background: transparent;
+  color: var(--pos-text-muted);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pos-chart-period button.active {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: var(--pos-accent, #fbbf24);
+  color: var(--pos-text);
+}
+
+.pos-chart-empty {
+  padding: 20px 12px;
+  color: var(--pos-text-muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.pos-line-chart {
+  margin-bottom: 16px;
+  color: #3b82f6;
+}
+
+.pos-line-chart-svg {
+  width: 100%;
+  height: 120px;
+  display: block;
+}
+
+.pos-line-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--pos-text-muted);
+}
+
+.pos-crop-bar-fill--green { background: linear-gradient(to right, #22c55e, #16a34a); }
+.pos-crop-bar-fill--yellow { background: linear-gradient(to right, #f59e0b, #d97706); }
+.pos-crop-bar-fill--red { background: linear-gradient(to right, #ef4444, #dc2626); }
+
+.pos-metric-info small.muted {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
 /* Dashboard layout grid */
 .pos-dashboard-row {
   display: grid;

@@ -53,7 +53,7 @@ if (pids.length) {
   killPids(pids);
 }
 
-const child = spawn(process.execPath, ['--watch', 'index.js'], {
+const child = spawn(process.execPath, ['--watch', 'index.mjs'], {
   stdio: 'inherit',
   env: process.env,
 });

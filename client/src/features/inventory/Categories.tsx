@@ -10,8 +10,12 @@ export default function Categories() {
 
   const add = async () => {
     if (!id.trim() || !name.trim()) return;
-    const cat = await inventoryService.createCategory({ id: id.trim(), name: name.trim() });
-    setItems((s) => [cat, ...s]); setId(''); setName('');
+    try {
+      const cat = await inventoryService.createCategory({ id: id.trim(), name: name.trim() });
+      setItems((s) => [cat, ...s]); setId(''); setName('');
+    } catch (err: any) {
+      alert(err?.message || 'Unable to add category');
+    }
   };
 
   return (

@@ -52,8 +52,20 @@ export const POS_TAB_TITLES_SHORT: Record<POSTab, [string, string]> = {
 export function getVisiblePosTabs(role: POSRole): POSTab[] {
   if (role === 'owner') return POS_NAV_ITEMS.map(item => item.id);
   if (role === 'admin') return ['dashboard', 'billing', 'entry', 'purchase', 'reports', 'ledger', 'users', 'customers', 'orders', 'chats'];
-  if (role === 'cashier') return ['billing', 'purchase', 'reports', 'ledger', 'customers', 'orders', 'chats'];
-  if (role === 'supplier') return ['orders', 'chats'];
-  if (role === 'customer') return ['billing', 'orders', 'chats', 'customers'];
+  if (role === 'cashier') return ['dashboard', 'billing', 'purchase', 'reports', 'ledger', 'customers', 'orders', 'chats'];
+  if (role === 'supplier') return ['dashboard', 'orders', 'chats'];
+  if (role === 'customer') return ['dashboard', 'billing', 'orders', 'chats', 'customers'];
   return [];
+}
+
+/** First screen after login — always Dashboard when the role can access it. */
+export function getDefaultPosTab(role: POSRole): POSTab {
+  const visible = getVisiblePosTabs(role);
+  if (visible.includes('dashboard')) return 'dashboard';
+  return visible[0] || 'dashboard';
+}
+
+export function isStaffRole(role: POSRole): boolean {
+  const normalized = String(role || '').toLowerCase();
+  return normalized === 'admin' || normalized === 'owner' || normalized === 'cashier';
 }

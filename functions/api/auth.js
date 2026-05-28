@@ -228,6 +228,7 @@ export async function onRequestPost({ request, env }) {
 /** GET /api/auth  — validate token from x-pos-token header */
 export async function onRequestGet({ request, env }) {
   if (!env.POS_JWT_SECRET) return json({ success: false, error: 'POS_JWT_SECRET not configured.' }, 500);
+  if (!env.DB) return json({ success: false, error: 'D1 database binding missing.' }, 500);
 
   const token = request.headers.get('x-pos-token') || '';
   if (!token)   return json({ success: false, error: 'No token provided.' }, 401);
@@ -235,7 +236,47 @@ export async function onRequestGet({ request, env }) {
   const payload = await verifyToken(token, env.POS_JWT_SECRET);
   if (!payload) return json({ success: false, error: 'Invalid or expired token.' }, 401);
 
-  return json({ success: true, cashier: payload.name, role: payload.role, email: payload.email });
+  let profile = null;
+  try {
+    await ensurePOSUsersTable(env.DB, env);
+    const user = await env.DB
+      .prepare('SELECT id, email, display_name, role, phone FROM login WHERE id = ?1')
+      .bind(Number(payload.sub || 0)).first();
+
+    if (user && String(user.role || '').toLowerCase() === 'customer') {
+      const customer = await env.DB
+        .prepare('SELECT id, full_name, phone, email, address, pan_no, login_id, loyalty_points FROM customers WHERE login_id = ?1 OR LOWER(email) = LOWER(?2) OR LOWER(phone) = LOWER(?3) ORDER BY id DESC LIMIT 1')
+        .bind(user.id, user.email || '', user.phone || '').first();
+
+      profile = customer ? {
+        _id: String(customer.id),
+        id: String(customer.id),
+        name: customer.full_name,
+        full_name: customer.full_name,
+        phone: customer.phone || user.phone || '',
+        email: customer.email || user.email || '',
+        address: customer.address || '',
+        pan_no: customer.pan_no || '',
+        panNo: customer.pan_no || '',
+        login_id: customer.login_id ? String(customer.login_id) : String(user.id),
+        loyalty_points: Number(customer.loyalty_points || 0),
+      } : {
+        id: String(user.id),
+        name: user.display_name,
+        full_name: user.display_name,
+        phone: user.phone || '',
+        email: user.email || '',
+        address: '',
+        pan_no: '',
+        panNo: '',
+        login_id: String(user.id),
+      };
+    }
+  } catch (err) {
+    try { console.warn('Auth profile lookup failed:', err); } catch {}
+  }
+
+  return json({ success: true, cashier: payload.name, role: payload.role, email: payload.email, profile });
 }
 
 /** DELETE /api/auth  — logout (client-side only; token is stateless) */

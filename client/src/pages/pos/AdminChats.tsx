@@ -162,7 +162,7 @@ export default function AdminChats() {
   const filteredProductsForChat = products.filter(p => {
     const q = productSearch.toLowerCase();
     return !q || p.nameEn.toLowerCase().includes(q) || p.nameNe.includes(q);
-  }).slice(0, 12);
+  });
 
   return (
     <div className="admin-chats-container">

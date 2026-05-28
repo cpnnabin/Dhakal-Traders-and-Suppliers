@@ -1,6 +1,22 @@
 import { Product, StockEntry } from './inventoryTypes';
 
 const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+const USE_LOCAL_FALLBACK = String(import.meta.env.VITE_INVENTORY_LOCAL_FALLBACK || '').trim() === '1';
+
+function readCache<T>(key: string): T[] {
+  if (!USE_LOCAL_FALLBACK) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCache<T>(key: string, value: T[]) {
+  if (!USE_LOCAL_FALLBACK) return;
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
 
 async function safeFetch(path: string, opts?: RequestInit) {
   try {
@@ -20,7 +36,7 @@ async function safeFetch(path: string, opts?: RequestInit) {
       try { window.location.hash = '#pos'; } catch (e) {}
       return null;
     }
-    if (!res.ok) throw new Error('Network');
+    if (!res.ok) throw new Error(await res.text().catch(() => '') || `Request failed with ${res.status}`);
     return res.json();
   } catch (e) {
     return null;
@@ -31,13 +47,12 @@ export const inventoryService = {
   async listProducts(): Promise<Product[]> {
     const j = await safeFetch('/api/products');
     if (j && j.success && Array.isArray(j.products)) return j.products.map((p: any) => ({ id: p.id, name: p.nameEn || p.name || '', sku: p.sku || '', category: p.category || '', brand: '', unit: p.unit || '', costPrice: p.purchasePrice || 0, sellingPrice: p.sellingPrice || 0, stock: p.stock || 0, minStock: p.minStock || 0, imageUrl: p.imageUrl || p.image || '' }));
-    // fallback to localStorage
-    try { const raw = localStorage.getItem('dt_inventory_products'); return raw ? JSON.parse(raw) : []; } catch { return []; }
+    return readCache<Product>('dt_inventory_products');
   },
   async getProduct(id: string): Promise<Product | undefined> {
     const j = await safeFetch(`/api/products/${encodeURIComponent(id)}`);
     if (j && j.success) return j.product;
-    try { const raw = localStorage.getItem('dt_inventory_products'); if (!raw) return undefined; const arr = JSON.parse(raw); return arr.find((p: any) => p.id === id); } catch { return undefined; }
+    return readCache<Product>('dt_inventory_products').find((p: any) => p.id === id);
   },
   async createProduct(p: Product): Promise<Product> {
     const body = {
@@ -45,66 +60,107 @@ export const inventoryService = {
     };
     const j = await safeFetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (j && j.success) return j.product;
-    // fallback to local
-    try { const raw = localStorage.getItem('dt_inventory_products'); const arr = raw ? JSON.parse(raw) : []; arr.push(p); localStorage.setItem('dt_inventory_products', JSON.stringify(arr)); return p; } catch { return p; }
+    if (USE_LOCAL_FALLBACK) {
+      const arr = readCache<Product>('dt_inventory_products');
+      arr.push(p);
+      writeCache('dt_inventory_products', arr);
+      return p;
+    }
+    throw new Error('Unable to create product.');
   },
   async updateProduct(id: string, patch: Partial<Product>): Promise<Product | undefined> {
     const j = await safeFetch(`/api/products/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
     if (j && j.success) return j.product;
-    try { const raw = localStorage.getItem('dt_inventory_products'); if (!raw) return undefined; const arr = JSON.parse(raw); const idx = arr.findIndex((x: any) => x.id === id); if (idx === -1) return undefined; arr[idx] = { ...arr[idx], ...patch }; localStorage.setItem('dt_inventory_products', JSON.stringify(arr)); return arr[idx]; } catch { return undefined; }
+    if (USE_LOCAL_FALLBACK) {
+      const arr = readCache<Product>('dt_inventory_products') as any[];
+      const idx = arr.findIndex((x: any) => x.id === id);
+      if (idx === -1) return undefined;
+      arr[idx] = { ...arr[idx], ...patch };
+      writeCache('dt_inventory_products', arr);
+      return arr[idx];
+    }
+    throw new Error('Unable to update product.');
   },
   async deleteProduct(id: string): Promise<boolean> {
     const j = await safeFetch(`/api/products/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (j && j.success) return true;
-    try { const raw = localStorage.getItem('dt_inventory_products'); if (!raw) return false; let arr = JSON.parse(raw); const before = arr.length; arr = arr.filter((x: any) => x.id !== id); localStorage.setItem('dt_inventory_products', JSON.stringify(arr)); return arr.length < before; } catch { return false; }
+    if (USE_LOCAL_FALLBACK) {
+      let arr = readCache<Product>('dt_inventory_products') as any[];
+      const before = arr.length;
+      arr = arr.filter((x: any) => x.id !== id);
+      writeCache('dt_inventory_products', arr);
+      return arr.length < before;
+    }
+    throw new Error('Unable to delete product.');
   },
 
   async listStock(): Promise<StockEntry[]> {
     const j = await safeFetch('/api/stock');
     if (j && j.success && Array.isArray(j.entries)) return j.entries;
-    try { const raw = localStorage.getItem('dt_inventory_stock'); return raw ? JSON.parse(raw) : []; } catch { return []; }
+    return readCache<StockEntry>('dt_inventory_stock');
   },
   async createStock(entry: StockEntry): Promise<StockEntry> {
     const j = await safeFetch('/api/stock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) });
     if (j && j.success) return j.entry;
-    try { const raw = localStorage.getItem('dt_inventory_stock'); const arr = raw ? JSON.parse(raw) : []; arr.push(entry); localStorage.setItem('dt_inventory_stock', JSON.stringify(arr)); // update product local
-      const rawP = localStorage.getItem('dt_inventory_products'); const prods = rawP ? JSON.parse(rawP) : []; const prod = prods.find((p: any) => p.id === entry.productId); if (prod) { prod.stock = (prod.stock || 0) + (entry.type === 'in' ? entry.qty : -entry.qty); localStorage.setItem('dt_inventory_products', JSON.stringify(prods)); }
+    if (USE_LOCAL_FALLBACK) {
+      const arr = readCache<StockEntry>('dt_inventory_stock');
+      arr.push(entry);
+      writeCache('dt_inventory_stock', arr);
       return entry;
-    } catch { return entry; }
+    }
+    throw new Error('Unable to create stock entry.');
   }
   ,
   // categories
   async listCategories() {
     const j = await safeFetch('/api/inventory/categories');
     if (j && j.success) return j.categories;
-    try { const raw = localStorage.getItem('dt_inventory_categories'); return raw ? JSON.parse(raw) : []; } catch { return []; }
+    return readCache<any>('dt_inventory_categories');
   },
   async createCategory(cat: { id: string; name: string; description?: string }) {
     const j = await safeFetch('/api/inventory/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cat) });
     if (j && j.success) return j.category;
-    try { const raw = localStorage.getItem('dt_inventory_categories'); const arr = raw ? JSON.parse(raw) : []; arr.push(cat); localStorage.setItem('dt_inventory_categories', JSON.stringify(arr)); return cat; } catch { return cat; }
+    if (USE_LOCAL_FALLBACK) {
+      const arr = readCache<any>('dt_inventory_categories');
+      arr.push(cat);
+      writeCache('dt_inventory_categories', arr);
+      return cat;
+    }
+    throw new Error('Unable to create category.');
   },
   // brands
   async listBrands() {
     const j = await safeFetch('/api/inventory/brands');
     if (j && j.success) return j.brands;
-    try { const raw = localStorage.getItem('dt_inventory_brands'); return raw ? JSON.parse(raw) : []; } catch { return []; }
+    return readCache<any>('dt_inventory_brands');
   },
   async createBrand(b: { id: string; name: string; description?: string }) {
     const j = await safeFetch('/api/inventory/brands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
     if (j && j.success) return j.brand;
-    try { const raw = localStorage.getItem('dt_inventory_brands'); const arr = raw ? JSON.parse(raw) : []; arr.push(b); localStorage.setItem('dt_inventory_brands', JSON.stringify(arr)); return b; } catch { return b; }
+    if (USE_LOCAL_FALLBACK) {
+      const arr = readCache<any>('dt_inventory_brands');
+      arr.push(b);
+      writeCache('dt_inventory_brands', arr);
+      return b;
+    }
+    throw new Error('Unable to create brand.');
   },
   // warehouses
   async listWarehouses() {
     const j = await safeFetch('/api/inventory/warehouses');
     if (j && j.success) return j.warehouses;
-    try { const raw = localStorage.getItem('dt_inventory_warehouses'); return raw ? JSON.parse(raw) : []; } catch { return []; }
+    return readCache<any>('dt_inventory_warehouses');
   },
   async createWarehouse(w: { id: string; name: string; location?: string }) {
     const j = await safeFetch('/api/inventory/warehouses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(w) });
     if (j && j.success) return j.warehouse;
-    try { const raw = localStorage.getItem('dt_inventory_warehouses'); const arr = raw ? JSON.parse(raw) : []; arr.push(w); localStorage.setItem('dt_inventory_warehouses', JSON.stringify(arr)); return w; } catch { return w; }
+    if (USE_LOCAL_FALLBACK) {
+      const arr = readCache<any>('dt_inventory_warehouses');
+      arr.push(w);
+      writeCache('dt_inventory_warehouses', arr);
+      return w;
+    }
+    throw new Error('Unable to create warehouse.');
   },
   // per-warehouse stock
   async listWarehouseStock(productId?: string, warehouseId?: string) {
@@ -133,12 +189,18 @@ export const inventoryService = {
     const q = productId ? `/api/inventory/batches?productId=${encodeURIComponent(productId)}` : '/api/inventory/batches';
     const j = await safeFetch(q);
     if (j && j.success) return j.batches;
-    try { const raw = localStorage.getItem('dt_inventory_batches'); return raw ? JSON.parse(raw) : []; } catch { return []; }
+    return readCache<any>('dt_inventory_batches');
   },
   async createBatch(batch: any) {
     const j = await safeFetch('/api/inventory/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(batch) });
     if (j && j.success) return j.batch;
-    try { const raw = localStorage.getItem('dt_inventory_batches'); const arr = raw ? JSON.parse(raw) : []; arr.push(batch); localStorage.setItem('dt_inventory_batches', JSON.stringify(arr)); return batch; } catch { return batch; }
+    if (USE_LOCAL_FALLBACK) {
+      const arr = readCache<any>('dt_inventory_batches');
+      arr.push(batch);
+      writeCache('dt_inventory_batches', arr);
+      return batch;
+    }
+    throw new Error('Unable to create batch.');
   },
   async checkExpiry(days = 30) {
     const j = await safeFetch('/api/inventory/check-expiry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days }) });

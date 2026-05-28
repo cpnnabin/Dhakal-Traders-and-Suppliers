@@ -1,14 +1,47 @@
 import express from 'express';
 import multer from 'multer';
+import jwt from 'jsonwebtoken';
+import path from 'path';
 
 import minioClient from './utils/minioClient.js';
+import { buildMinioProxyImageUrl } from './utils/minioStorage.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+function getBearerToken(req) {
+  const header = req.headers.authorization || '';
+  if (String(header).startsWith('Bearer ')) return String(header).slice(7).trim();
+  const legacy = req.headers['x-pos-token'];
+  return legacy ? String(legacy).trim() : '';
+}
+
+function requirePosAuth(req, res, next) {
+  try {
+    const token = getBearerToken(req);
+    if (!token) return res.status(401).json({ success: false, message: 'Missing auth token' });
+    const secret = process.env.JWT_SECRET || 'dev_jwt_secret';
+    const uploadsDir = path.resolve(process.cwd(), "uploads");
+    // Ensure the uploads directory exists.
+    const fs = require('fs');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const payload = jwt.verify(token, secret);
+    req.pos = payload;
+    const role = String(payload?.role || '').toLowerCase();
+    if (!['owner', 'admin', 'cashier'].includes(role)) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    return next();
+  } catch (error) {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+}
+
 // Server-side upload validation / optional resize
 const MAX_FILE_SIZE = Number(process.env.MAX_UPLOAD_SIZE_BYTES || 5 * 1024 * 1024); // 5MB default
-const ALLOWED_MIMES = (process.env.ALLOWED_IMAGE_MIMES || 'image/jpeg,image/png,image/webp').split(',');
+const ALLOWED_MIMES = (process.env.ALLOWED_IMAGE_MIMES || 'image/jpeg,image/png,image/webp,image/gif,image/avif').split(',').map((m) => m.trim()).filter(Boolean);
 
 router.post('/upload', upload.single('image'), async (req, res) => {
   try {
@@ -23,7 +56,8 @@ router.post('/upload', upload.single('image'), async (req, res) => {
     }
 
     const bucketName = String(process.env.MINIO_IMAGE_BUCKET || 'images');
-    let fileName = `${Date.now()}-${req.file.originalname}`;
+    const safeOriginalName = path.basename(String(req.file.originalname || 'image')).replace(/\s+/g, '-');
+    let fileName = `${Date.now()}-${safeOriginalName}`;
     let uploadBuffer = req.file.buffer;
     let contentType = req.file.mimetype;
 
@@ -43,7 +77,7 @@ router.post('/upload', upload.single('image'), async (req, res) => {
               contentType = `image/${metadata.format}`;
             }
             // update filename to indicate resizing
-            const ext = (contentType === 'image/png' ? '.png' : contentType === 'image/webp' ? '.webp' : '.jpg');
+            const ext = (contentType === 'image/png' ? '.png' : contentType === 'image/webp' ? '.webp' : contentType === 'image/avif' ? '.avif' : contentType === 'image/gif' ? '.gif' : '.jpg');
             fileName = `${Date.now()}-resized${ext}`;
           }
         }
@@ -67,7 +101,7 @@ router.post('/upload', upload.single('image'), async (req, res) => {
       { 'Content-Type': contentType }
     );
 
-    const imageUrl = `${String(process.env.MINIO_PUBLIC_BASE_URL || 'http://127.0.0.1:9000')}/${bucketName}/${fileName}`;
+    const imageUrl = buildMinioProxyImageUrl({ bucket: bucketName, name: fileName });
     return res.json({ success: true, imageUrl });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

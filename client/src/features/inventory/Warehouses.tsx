@@ -14,8 +14,12 @@ export default function Warehouses() {
 
   const add = async () => {
     if (!id.trim() || !name.trim()) return;
-    const w = await inventoryService.createWarehouse({ id: id.trim(), name: name.trim(), location: loc.trim() });
-    setItems((s) => [w, ...s]); setId(''); setName(''); setLoc('');
+    try {
+      const w = await inventoryService.createWarehouse({ id: id.trim(), name: name.trim(), location: loc.trim() });
+      setItems((s) => [w, ...s]); setId(''); setName(''); setLoc('');
+    } catch (err: any) {
+      alert(err?.message || 'Unable to add warehouse');
+    }
   };
 
   return (
@@ -63,8 +67,12 @@ export default function Warehouses() {
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={async () => {
               if (!transfer.productId || !transfer.from || !transfer.to || !transfer.qty) return alert('Provide product/from/to/qty');
-              await inventoryService.transfer(String(transfer.productId), String(transfer.from), String(transfer.to), Number(transfer.qty), transfer.note || '');
-              alert('Transfer executed');
+              try {
+                await inventoryService.transfer(String(transfer.productId), String(transfer.from), String(transfer.to), Number(transfer.qty), transfer.note || '');
+                alert('Transfer executed');
+              } catch (err: any) {
+                alert(err?.message || 'Unable to transfer stock');
+              }
               setTransfer({});
             }}>Transfer</button>
           </div>

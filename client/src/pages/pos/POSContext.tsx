@@ -2,6 +2,7 @@ import React from 'react';
 import { useLanguage } from '../../LanguageContext';
 import { Product, CartItem, SaleRecord, FarmerPurchase, loadLS, saveLS, LS, normalizeProduct, normalizePurchaseRecord, normalizeSaleRecord, normalizeParty } from './posTypes';
 import { getPOSSession } from '../POSLogin';
+import socket from '../../sockets/socket';
 
 // ─── POS Global State Context ──────────────────────────────────────────────────
 // Provides shared state (products, cart, sales, purchases) to all POS sub-pages.
@@ -50,6 +51,9 @@ export interface POSContextValue {
   // API Call helper
   apiCall: (endpoint: string, method?: string, body?: any) => Promise<any>;
 
+  // Force reload of products from the server
+  reloadProducts: () => Promise<void>;
+
   // Translation helper
   t: (ne: string, en: string) => string;
 }
@@ -90,7 +94,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   const [sales,        setSales]        = React.useState<SaleRecord[]>(() => loadLS(LS.sales, []).map(normalizeSaleRecord));
   const [customers,    setCustomers]    = React.useState<any[]>([]);
   const [users,        setUsers]        = React.useState<any[]>([]);
-  const [cart,         setCart]         = React.useState<CartItem[]>([]);
+  const [cart,         setCart]         = React.useState<CartItem[]>(() => loadLS(LS.cart, []).map((c: any) => ({ product: normalizeProduct(c.product), quantity: Number(c.quantity || 0), discountPct: Number(c.discountPct || 0) })));
   const [cashier,      setCashier]      = React.useState<any>(() => {
     const session = getPOSSession();
     if (!session.token) return null;
@@ -203,6 +207,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => { saveLS(LS.products,  products);  }, [products]);
   React.useEffect(() => { saveLS(LS.sales,     sales);     }, [sales]);
   React.useEffect(() => { saveLS(LS.purchases, purchases); }, [purchases]);
+  React.useEffect(() => { try { saveLS(LS.cart, cart); } catch (e) {} }, [cart]);
 
   React.useEffect(() => {
     const session = getPOSSession();
@@ -243,6 +248,31 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     fetchData();
   }, []);
 
+  // Keep products and sales in sync when other terminals emit events
+  React.useEffect(() => {
+    try {
+      const handleSaleNew = async (payload: any) => {
+        try {
+          const pRes = await apiCall('/products');
+          if (pRes.success && pRes.products && Array.isArray(pRes.products)) {
+            const normalizedProducts = pRes.products.map(normalizeProduct);
+            const deduped = dedupeProducts(normalizedProducts);
+            setProducts(deduped);
+            saveLS(LS.products, deduped);
+          }
+          const sRes = await apiCall('/sales');
+          if (sRes.success && sRes.sales && Array.isArray(sRes.sales)) {
+            const normalizedSales = sRes.sales.map(normalizeSaleRecord);
+            setSales(normalizedSales);
+            saveLS(LS.sales, normalizedSales);
+          }
+        } catch (e) { /* ignore */ }
+      };
+      socket.on('sale:new', handleSaleNew);
+      return () => { try { socket.off('sale:new', handleSaleNew); } catch (e) {} };
+    } catch (e) {}
+  }, []);
+
   return (
     <POSContext.Provider value={{
       products, setProducts,
@@ -257,6 +287,19 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       receiptData, setReceiptData,
       receiptEditTarget, setReceiptEditTarget,
       apiCall,
+      reloadProducts: async () => {
+        try {
+          const pRes = await apiCall('/products');
+          if (pRes.success && pRes.products && Array.isArray(pRes.products)) {
+            const normalizedProducts = pRes.products.map(normalizeProduct);
+            const deduped = dedupeProducts(normalizedProducts);
+            setProducts(deduped);
+            saveLS(LS.products, deduped);
+          }
+        } catch (e) {
+          // ignore reload errors
+        }
+      },
       t,
     }}>
       {children}

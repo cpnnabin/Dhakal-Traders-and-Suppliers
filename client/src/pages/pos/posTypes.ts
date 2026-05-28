@@ -1,5 +1,6 @@
 // ─── Shared POS Types ─────────────────────────────────────────────────────────
 
+export const CATS = ['All Items', 'herbs', 'grains', 'daily', 'supplies'];
 export interface Product {
   id: string;
   barcode?: string;
@@ -154,6 +155,7 @@ export interface SaleRecord {
   loyalty_point_earned?: number;
   loyalty_total_points?: number;
   created_at?: string;
+  receiptFlow?: 'payAndPrint' | 'completeSale' | 'pending';
 }
 
 export interface DbProductRow {
@@ -442,6 +444,7 @@ export const LS = {
   sales: 'dt_pos_sales',
   parties: 'dt_pos_parties',
   payments: 'dt_pos_payments',
+  cart: 'dt_pos_cart',
 };
 
 export function loadLS<T>(key: string, fallback: T): T {

@@ -24,10 +24,29 @@ async function ensureOrdersTable(db) {
       customerEmail TEXT,
       address TEXT,
       note TEXT,
+      customerId TEXT,
+      customerDetails TEXT,
+      cartItems TEXT,
+      totals TEXT,
+      paymentMode TEXT,
       status TEXT DEFAULT 'pending',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
+
+  const info = await db.prepare('PRAGMA table_info(orders)').all();
+  const columns = new Set((info?.results ?? []).map((c) => c.name));
+  for (const [name, type] of [
+    ['customerId', 'TEXT'],
+    ['customerDetails', 'TEXT'],
+    ['cartItems', 'TEXT'],
+    ['totals', 'TEXT'],
+    ['paymentMode', 'TEXT'],
+  ]) {
+    if (!columns.has(name)) {
+      await db.prepare(`ALTER TABLE orders ADD COLUMN ${name} ${type}`).run();
+    }
+  }
 }
 
 export const onRequestOptions = async () => new Response(null, { status: 204, headers: CORS });
@@ -48,24 +67,30 @@ export async function onRequestPost({ request, env }) {
   let body;
   try { body = await request.json(); } catch { return json({ success: false, error: 'Invalid JSON body.' }, 400); }
 
-  const { id, productId, productName, qty, customerName, customerPhone, customerEmail, address, note, status } = body;
-  if (!id || !productName || !qty) return json({ success: false, error: 'Required fields missing.' }, 400);
+  const { id, productId, productName, qty, customerName, customerPhone, customerEmail, address, note, status, customerId, customerDetails, cartItems, totals, paymentMode } = body;
+  const isStructured = Array.isArray(cartItems) && cartItems.length > 0;
+  if (!id || (!isStructured && (!productName || !qty))) return json({ success: false, error: 'Required fields missing.' }, 400);
 
   try {
     await ensureOrdersTable(env.DB);
-    await env.DB.prepare(`
-      INSERT INTO orders (id, productId, productName, qty, customerName, customerPhone, customerEmail, address, note, status)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-    `).bind(
+    await env.DB.prepare(
+      `INSERT INTO orders (id, productId, productName, qty, customerName, customerPhone, customerEmail, address, note, customerId, customerDetails, cartItems, totals, paymentMode, status)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`
+    ).bind(
       id.trim(),
-      productId ? String(productId).trim() : null,
-      productName.trim(),
-      Number(qty),
+      isStructured ? null : (productId ? String(productId).trim() : null),
+      isStructured ? `Order #${String(id).trim()}` : String(productName).trim(),
+      isStructured ? Number((totals && (totals.totalItems || totals.quantity)) || cartItems.length || 1) : Number(qty),
       customerName ? String(customerName).trim() : null,
       customerPhone ? String(customerPhone).trim() : null,
       customerEmail ? String(customerEmail).trim() : null,
       address ? String(address).trim() : null,
       note ? String(note).trim() : null,
+      customerId ? String(customerId).trim() : null,
+      customerDetails ? JSON.stringify(customerDetails) : null,
+      isStructured ? JSON.stringify(cartItems) : null,
+      totals ? JSON.stringify(totals) : null,
+      paymentMode ? String(paymentMode).trim() : null,
       status || 'pending'
     ).run();
 

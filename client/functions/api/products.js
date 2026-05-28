@@ -14,6 +14,19 @@ const json = (data, status = 200) =>
     headers: { 'content-type': 'application/json; charset=utf-8', ...CORS },
   });
 
+function resolveProductImageUrl(env, value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^data:image\//i.test(raw) || /^https?:\/\//i.test(raw) || /^\/\//.test(raw)) return raw;
+
+  const base = String(env?.MINIO_PUBLIC_BASE_URL || 'http://127.0.0.1:9000').replace(/\/$/, '');
+  const file = raw.replace(/^\/+/, '').replace(/^images\//i, '');
+  if (/\.[a-z0-9]{2,5}$/i.test(file)) {
+    return `${base}/images/${file}`;
+  }
+  return raw;
+}
+
 async function ensureProductsTable(db) {
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS products (
@@ -41,7 +54,13 @@ export async function onRequestGet({ env }) {
   try {
     await ensureProductsTable(env.DB);
     const { results } = await env.DB.prepare('SELECT * FROM products').all();
-    return json({ success: true, products: results });
+    return json({
+      success: true,
+      products: results.map((p) => ({
+        ...p,
+        imageUrl: resolveProductImageUrl(env, p.imageUrl || p.image || ''),
+      })),
+    });
   } catch (err) {
     return json({ success: false, error: err.message }, 500);
   }

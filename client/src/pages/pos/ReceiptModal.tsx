@@ -1,5 +1,5 @@
 // ─── POS: Thermal Receipt Modal ───────────────────────────────────────────────
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { usePOS } from './POSContext';
@@ -124,6 +124,9 @@ function ReceiptCustomerBlock({
 export default function ReceiptModal() {
   const { receiptData, setReceiptData, customers, setReceiptEditTarget, t } = usePOS();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const lastActiveElementRef = useRef<HTMLElement | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [paperSize, setPaperSize] = useState<'thermal'|'a5'|'a4'>('thermal');
 
@@ -166,12 +169,122 @@ export default function ReceiptModal() {
     }
   };
 
+  const focusFirstElement = useCallback(() => {
+    const container = modalRef.current;
+    if (!container) return;
+    const focusable = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+    (focusable[0] || closeButtonRef.current || container).focus?.();
+  }, []);
+
+  const navigateAfterClose = useCallback((targetPath: '/pos' | '/pos/checkout') => {
+    if (targetPath === '/pos/checkout') {
+      if ((window.location.pathname || '').toLowerCase().replace(/\/+$/, '') === '/pos/receipt') {
+        window.history.back();
+      } else {
+        window.history.pushState({ posStep: 'checkout' }, '', '/pos/checkout');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+      return;
+    }
+
+    window.history.pushState({ posStep: 'select' }, '', '/pos');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, []);
+
+  const closeReceipt = useCallback(() => {
+    const flow = receiptData?.receiptFlow;
+    setReceiptData(null);
+    navigateAfterClose(flow === 'payAndPrint' ? '/pos/checkout' : '/pos');
+    window.setTimeout(() => {
+      lastActiveElementRef.current?.focus?.();
+    }, 0);
+  }, [navigateAfterClose, receiptData?.receiptFlow, setReceiptData]);
+
+  const backToCheckout = useCallback(() => {
+    const currentPath = (window.location.pathname || '/pos').toLowerCase().replace(/\/+$/, '') || '/pos';
+    setReceiptData(null);
+    if (currentPath === '/pos/receipt') {
+      window.history.back();
+      return;
+    }
+    window.history.pushState({ posStep: 'checkout' }, '', '/pos/checkout');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, [setReceiptData]);
+
+  useEffect(() => {
+    if (!receiptData) return;
+    lastActiveElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const timer = window.setTimeout(() => focusFirstElement(), 0);
+    return () => window.clearTimeout(timer);
+  }, [receiptData, focusFirstElement]);
+
+  useEffect(() => {
+    if (!receiptData) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeReceipt();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const container = modalRef.current;
+      if (!container) return;
+
+      const focusable = Array.from(
+        container.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        closeButtonRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey) {
+        if (!active || active === first || !container.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+
+      if (!active || active === last || !container.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [receiptData, closeReceipt]);
+
   if (!receiptData) return null;
+  const showBackToCheckout = receiptData.receiptFlow === 'payAndPrint';
   return (
-    <div className="pos-modal-overlay">
-      <div className="pos-modal">
+    <div className="pos-modal-overlay" role="presentation" onClick={closeReceipt}>
+      <div
+        className="pos-modal"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="receipt-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="pos-modal-actions no-print">
-          <span style={{ color: '#FFF', fontWeight: 600, fontSize: 14 }}>
+          <span id="receipt-modal-title" style={{ color: '#FFF', fontWeight: 600, fontSize: 14 }}>
             📄 {t('कर बिजक', 'Tax Invoice / Receipt')}
           </span>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -208,7 +321,14 @@ export default function ReceiptModal() {
               <button className="pos-sec-btn" type="button" onClick={() => { if (receiptData) setReceiptEditTarget(receiptData); }}>
                 ✏️ {t('सम्पादन', 'Edit')}
               </button>
-            <button className="close-btn" type="button" onClick={() => setReceiptData(null)}>
+            <button
+              className="close-btn"
+              ref={closeButtonRef}
+              type="button"
+              onClick={closeReceipt}
+              aria-label={t('बन्द', 'Close receipt')}
+              title={showBackToCheckout ? 'Back to Checkout' : t('बन्द', 'Close')}
+            >
               ✕ {t('बन्द', 'Close')}
             </button>
           </div>
@@ -303,8 +423,29 @@ export default function ReceiptModal() {
           </div>
         </div>
         {/* Bottom actions (also printable controls hidden via .no-print) */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '12px 18px' }} className="no-print">
-          <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '12px 18px', alignItems: 'center' }} className="no-print">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {showBackToCheckout ? (
+              <button
+                type="button"
+                onClick={backToCheckout}
+                aria-label="Back to checkout"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#F59E0B',
+                  padding: 0,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <i className="ri-arrow-left-line" /> {t('चेकआउटमा फर्कनुहोस्', 'Back to Checkout')}
+              </button>
+            ) : null}
             <button className="download-btn" type="button" onClick={handleDownloadPDF} disabled={downloading}>{downloading ? '⏳ ...' : `📥 ${t('डाउनलोड', 'Download')}`}</button>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

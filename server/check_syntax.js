@@ -1,0 +1,1 @@
+const fs=require('fs');const s=fs.readFileSync('index.js','utf8');function count(ch){return (s.split(ch).length-1);}console.log('{',count('{'),' }',count('}'));console.log('(',count('('),' )',count(')'));console.log('[',count('['),']',count(']'));console.log('`', (s.match(/`/g)||[]).length);console.log("--- last 200 chars ---");console.log(s.slice(-200));

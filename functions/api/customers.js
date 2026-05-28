@@ -70,12 +70,29 @@ async function ensureCustomersTable(db) {
 export const onRequestOptions = async () =>
   new Response(null, { status: 204, headers: CORS });
 
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
   if (!env.DB) return json({ success: false, error: 'D1 database binding missing.' }, 500);
 
   try {
     await ensureCustomersTable(env.DB);
-    const { results } = await env.DB.prepare('SELECT id, full_name, phone, email, login_id, address, pan_no, loyalty_points, opening_balance FROM customers ORDER BY full_name ASC').all();
+    const requestUrl = request?.url ? new URL(request.url) : null;
+    const search = String(requestUrl?.searchParams.get('search') || '').trim();
+    const limit = Math.max(1, Math.min(100, Number(requestUrl?.searchParams.get('limit') || 50)));
+
+    let query = 'SELECT id, full_name, phone, email, login_id, address, pan_no, loyalty_points, opening_balance FROM customers';
+    const binds = [];
+    if (search) {
+      const like = `%${search.toLowerCase()}%`;
+      query += ` WHERE LOWER(CAST(id AS TEXT)) LIKE ?1 OR LOWER(full_name) LIKE ?1 OR LOWER(phone) LIKE ?1 OR LOWER(IFNULL(email, '')) LIKE ?1 OR LOWER(IFNULL(address, '')) LIKE ?1 OR LOWER(IFNULL(pan_no, '')) LIKE ?1 OR LOWER(CAST(IFNULL(login_id, '') AS TEXT)) LIKE ?1`;
+      binds.push(like);
+    }
+    query += ' ORDER BY full_name ASC LIMIT ' + (search ? '?2' : '?1');
+
+    const stmt = search
+      ? env.DB.prepare(query).bind(binds[0], limit)
+      : env.DB.prepare(query).bind(limit);
+
+    const { results } = await stmt.all();
 
     const customers = results.map((c) => ({
       _id: String(c.id),

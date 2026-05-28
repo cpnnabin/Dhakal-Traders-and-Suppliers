@@ -21,7 +21,14 @@ export default function ProductList() {
 
   const onCreate = () => { setEditing(null); setShowForm(true); };
   const onEdit = (p: Product) => { setEditing(p); setShowForm(true); };
-  const onDelete = async (id: string) => { await inventoryService.deleteProduct(id); load(); };
+  const onDelete = async (id: string) => {
+    try {
+      await inventoryService.deleteProduct(id);
+      load();
+    } catch (err: any) {
+      alert(err?.message || 'Unable to delete product');
+    }
+  };
 
   // derived lists for filtering, sorting and pagination
   const qLower = query.trim().toLowerCase();
@@ -97,8 +104,12 @@ export default function ProductList() {
                       return;
                     }
                   } catch (e) {}
-                  await inventoryService.updateProduct(p.id, { minStock: n });
-                  await load();
+                  try {
+                    await inventoryService.updateProduct(p.id, { minStock: n });
+                    await load();
+                  } catch (err: any) {
+                    alert(err?.message || 'Unable to update min stock');
+                  }
                 }}>Set min</button>
                 <button className="pos-danger-btn" onClick={() => onDelete(p.id)}>Delete</button>
               </td>

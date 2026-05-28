@@ -4,7 +4,7 @@ import { usePOS } from './POSContext';
 import { FarmerPurchase } from './posTypes';
 
 export default function PurchasePage() {
-  const { products, setProducts, purchases, setPurchases, apiCall, t, cashier } = usePOS();
+  const { products, setProducts, purchases, setPurchases, apiCall, t, cashier, reloadProducts } = usePOS();
 
   const [farmerName, setFarmerName] = React.useState('');
   const [prodId,     setProdId]     = React.useState(products[0]?.id || '');
@@ -68,6 +68,7 @@ export default function PurchasePage() {
       setQty(0);
       setRate(0);
       setPaymentMode('Cash');
+      try { reloadProducts(); } catch (e) { /* ignore */ }
     } else {
       alert(t('बचत गर्न असफल भयो: ', 'Failed to save: ') + (purchaseRes.error || productRes.error || ''));
     }
